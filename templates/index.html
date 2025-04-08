@@ -289,10 +289,28 @@
         // Initialize the visualization
         function initVisualization(sandboxCount) {
             console.log("Initializing visualization with", sandboxCount, "sandboxes");
+            
+            // Clean up any existing simulation
+            if (simulation) {
+                simulation.stop();
+            }
+            
+            // Clean up any lingering intervals from previous runs
+            if (sandboxNodes && sandboxNodes.length) {
+                sandboxNodes.forEach(node => {
+                    if (node.pulseInterval) {
+                        clearInterval(node.pulseInterval);
+                        node.pulseInterval = null;
+                    }
+                });
+            }
 
-            // Clear previous visualization
+            // Clear previous visualization completely
             d3.select("#visualizationContainer").selectAll("*").remove();
-
+            
+            // Remove any custom style tags added for node colors
+            document.querySelectorAll('style[data-purpose="node-color"]').forEach(el => el.remove());
+            
             // Get container dimensions
             const container = document.getElementById('visualizationContainer');
             const width = container.clientWidth;
@@ -300,6 +318,9 @@
 
             // Mark visualization as initialized
             visualizationInitialized = true;
+            
+            // Reset sandbox nodes completely
+            sandboxNodes = [];
 
             // Create SVG container
             const svg = d3.select("#visualizationContainer")
@@ -580,6 +601,8 @@
                 // Ultra-aggressive approach:
                 // 1. Create an inline script that directly modifies the SVG element
                 const styleScript = document.createElement('script');
+                styleScript.dataset.purpose = "node-color";
+                styleScript.dataset.nodeId = node.id;
                 styleScript.textContent = `
                     // This script directly modifies the SVG element
                     (function() {
@@ -617,6 +640,8 @@
                 
                 // Also inject a style tag to force colors via CSS
                 const styleTag = document.createElement('style');
+                styleTag.dataset.purpose = "node-color";
+                styleTag.dataset.nodeId = node.id;
                 styleTag.textContent = `
                     .node-circle-${node.id} {
                         fill: ${node.status === 'complete' ? '#10b981' : '#ef4444'} !important;
@@ -676,6 +701,34 @@
             document.getElementById('testModeBanner').classList.remove('hidden');
         }
 
+        // Function to reset all D3 node colors to initial state
+        function resetNodeColors() {
+            console.log("🧹 Resetting all node colors to initial state");
+            
+            // Remove all color-specific style tags and scripts
+            document.querySelectorAll('style[data-purpose="node-color"], script[data-purpose="node-color"]')
+                .forEach(el => el.remove());
+            
+            // Reset window.d3NodeFixer
+            window.d3NodeFixer = {};
+            
+            // Apply pending color to all nodes
+            d3.selectAll(".node-circle").each(function(d) {
+                // Skip center node
+                if (d.id === 'center') return;
+                
+                // Reset to default pending color
+                d3.select(this)
+                    .style("fill", "#e5e7eb")
+                    .style("stroke", "#6b7280")
+                    .attr("fill", "#e5e7eb")
+                    .attr("stroke", "#6b7280")
+                    .classed("status-complete", false)
+                    .classed("status-error", false)
+                    .classed("status-pending", true);
+            });
+        }
+        
         // Function to directly fix node colors - can be called at any time
         function fixNodeColors() {
             console.log("🔧 Fixing node colors for all sandboxes");
@@ -746,10 +799,27 @@
 
             // Reset visualization and clean up intervals
             sandboxNodes.forEach(node => {
-                if (node.pulseInterval) clearInterval(node.pulseInterval);
+                if (node.pulseInterval) {
+                    clearInterval(node.pulseInterval);
+                    node.pulseInterval = null;
+                }
+                
+                // Clean up any DOM styles that might have been added for this node
+                document.querySelectorAll(`style[data-purpose="node-color"][data-node-id="${node.id}"]`)
+                    .forEach(el => el.remove());
+                document.querySelectorAll(`script[data-purpose="node-color"][data-node-id="${node.id}"]`)
+                    .forEach(el => el.remove());
             });
+            
+            // Reset global state
             sandboxNodes = [];
             currentSessionId = null;
+            
+            // Reset all node colors explicitly
+            resetNodeColors();
+            
+            // Remove D3 window global helpers
+            window.d3NodeFixer = {};
 
             // Initialize visualization immediately with the current sandbox count
             initVisualization(sandboxCount);
