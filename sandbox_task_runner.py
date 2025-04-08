@@ -9,10 +9,15 @@ print("DEBUG[sandbox]: Hard-coded GROQ_API_KEY is present:", bool(os.environ.get
 
 def generate_code(user_input):
     """Generate Python code based on user input using Groq API and LLaMA 4"""
+    import time
+    
     # Initialize Groq client
     groq_api_key = os.environ.get("GROQ_API_KEY")
     print(f"DEBUG[sandbox]: Using GROQ_API_KEY: {'Present' if groq_api_key else 'Missing'}")
     client = Groq(api_key=groq_api_key)
+    
+    # Start timing the LLM code generation
+    groq_start_time = time.time()
     
     # Generate code using LLaMA 4
     chat_completion = client.chat.completions.create(
@@ -29,8 +34,12 @@ def generate_code(user_input):
         model="meta-llama/llama-4-scout-17b-16e-instruct",
     )
     
+    # Calculate LLM generation time
+    groq_time = time.time() - groq_start_time
+    print(f"DEBUG[sandbox]: GROQ API response time: {groq_time:.2f}s")
+    
     # Extract the generated code
-    return chat_completion.choices[0].message.content
+    return chat_completion.choices[0].message.content, groq_time
 
 def execute_code(code):
     """Execute the generated code and capture output"""
@@ -99,8 +108,12 @@ def process_task(user_input):
     try:
         # Generate code
         try:
-            generated_code = generate_code(user_input)
+            import time
+            code_gen_start = time.time()
+            generated_code, groq_time = generate_code(user_input)
+            code_gen_total_time = time.time() - code_gen_start
             print(f"Successfully generated code for: {user_input}")
+            print(f"DEBUG[sandbox]: LLM time: {groq_time:.2f}s, Total gen time: {code_gen_total_time:.2f}s")
         except Exception as e:
             print(f"Error generating code: {str(e)}")
             # If we can't generate code, use a default function that accomplishes nothing
@@ -116,6 +129,8 @@ def fallback_function():
 result = fallback_function()
 print(f"Result: {{result}}")
 """
+            groq_time = 0
+            code_gen_total_time = 0
         
         # Save the generated code to a file in the home dir
         import os
@@ -132,11 +147,15 @@ print(f"Result: {{result}}")
         with open(output_file_path, "w") as f:
             f.write(execution_results["execution_output"])
         
-        # Return the results
+        # Return the results with timing information
+        import time
         result = {
             "generated_code": generated_code,
             "execution_output": execution_results["execution_output"],
-            "execution_result": execution_results["execution_result"]
+            "execution_result": execution_results["execution_result"],
+            "groq_time": groq_time,                  # Time for GROQ to generate the code
+            "code_generation_time": code_gen_total_time,  # Total time for code generation (including API latency)
+            "sandbox_start_time": time.time()       # Timestamp when sandbox processing is complete
         }
         
         result_file_path = os.path.join(home_dir, "result.json")

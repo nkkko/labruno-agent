@@ -2,6 +2,7 @@ import os
 import uuid
 import json
 import tempfile
+import time
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 from daytona_sdk import Daytona, DaytonaConfig, CreateSandboxParams
@@ -37,6 +38,7 @@ daytona = Daytona(DaytonaConfig(api_key=daytona_api_key, target=daytona_target))
 
 def create_sandbox(code_to_upload=None):
     """Create a Daytona sandbox and optionally upload code to it"""
+    start_time = time.time()
     params = CreateSandboxParams(language="python")
     
     # Get environment variables
@@ -44,7 +46,11 @@ def create_sandbox(code_to_upload=None):
     print(f"DEBUG: Using GROQ_API_KEY: {'Present' if groq_api_key else 'Missing'}")
     
     sandbox = daytona.create(params)
-    print(f"DEBUG: Created sandbox: {sandbox}")
+    creation_time = time.time() - start_time
+    print(f"DEBUG: Created sandbox in {creation_time:.2f}s: {sandbox}")
+    
+    # Add creation time to sandbox object for tracking
+    sandbox.creation_time = creation_time
     
     # Set environment variables in the sandbox
     try:
@@ -130,6 +136,7 @@ print(f"DEBUG[sandbox]: GROQ_API_KEY set directly: {os.environ.get('GROQ_API_KEY
 
 def prepare_sandbox(sandbox, task_runner_code):
     """Prepare a sandbox with task runner code and environment variables"""
+    start_time = time.time()
     try:
         # Create directory structure
         sandbox.fs.create_folder("/home/daytona/labruno", "755")
@@ -158,6 +165,11 @@ print(f"DEBUG[sandbox]: GROQ_API_KEY set directly: {os.environ.get('GROQ_API_KEY
 '''
         sandbox.process.code_run(env_setup_code)
         
+        # Calculate preparation time
+        prep_time = time.time() - start_time
+        sandbox.prep_time = prep_time
+        print(f"DEBUG: Prepared sandbox in {prep_time:.2f}s")
+        
         return sandbox
     except Exception as e:
         print(f"DEBUG: Error preparing sandbox: {str(e)}")
@@ -166,6 +178,9 @@ print(f"DEBUG[sandbox]: GROQ_API_KEY set directly: {os.environ.get('GROQ_API_KEY
 def generate_and_execute_code(sandbox, user_input, task_runner_path=None):
     """Generate and execute code in a sandbox based on user input"""
     print(f"DEBUG: In generate_and_execute_code with sandbox: {sandbox}")
+    
+    # Start timing for code generation and execution
+    gen_start_time = time.time()
     
     # Use Groq API to generate code
     try:
@@ -489,20 +504,24 @@ result = run_code_generation_and_execution()
         except Exception as e:
             print(f"DEBUG: Failed to parse result: {str(e)}")
             print(f"DEBUG: Raw result: {result.result if hasattr(result, 'result') else str(result)}")
+            gen_time = time.time() - gen_start_time
             return {
                 "error": f"Failed to parse result: {str(e)}", 
                 "generated_code": "Error parsing result",
-                "execution_output": result.result if hasattr(result, 'result') else str(result)
+                "execution_output": result.result if hasattr(result, 'result') else str(result),
+                "execution_time": gen_time
             }
             
     except Exception as e:
         print(f"DEBUG: Exception in generate_and_execute_code: {str(e)}")
         import traceback
         print(traceback.format_exc())
+        gen_time = time.time() - gen_start_time
         return {
             "error": str(e),
             "generated_code": "Error occurred",
-            "execution_output": traceback.format_exc()
+            "execution_output": traceback.format_exc(),
+            "execution_time": gen_time
         }
 
 def evaluate_results(main_sandbox, results):
@@ -580,9 +599,11 @@ def index():
 
 @app.route('/execute', methods=['POST'])
 def execute():
+    start_time = time.time()
     user_input = request.form.get('user_input')
     results = []
     evaluation = {"error": "Not started"}
+    timing_data = {}
     
     if not user_input:
         return jsonify({"error": "No input provided"}), 400
@@ -640,16 +661,30 @@ def execute():
         # Function to create and prepare a sandbox concurrently
         def create_and_prepare_sandbox():
             try:
+                # Sandbox creation is already timed inside the function
                 sandbox = create_sandbox()
-                return prepare_sandbox(sandbox, task_runner_code)
+                prepared_sandbox = prepare_sandbox(sandbox, task_runner_code)
+                
+                # Calculate total sandbox preparation time
+                total_prep_time = getattr(sandbox, 'creation_time', 0) + getattr(prepared_sandbox, 'prep_time', 0)
+                prepared_sandbox.total_prep_time = total_prep_time
+                
+                return prepared_sandbox
             except Exception as e:
                 print(f"DEBUG: Error creating and preparing sandbox: {str(e)}")
                 return None
+        
+        # Store sandbox creation start time
+        sandbox_start_times = {}
         
         # Create 5 sandboxes concurrently
         with ThreadPoolExecutor(max_workers=5) as executor:
             # Submit 5 sandbox creation tasks
             future_to_sandbox = {executor.submit(create_and_prepare_sandbox): i for i in range(5)}
+            
+            # Track start time for each sandbox
+            for i in range(5):
+                sandbox_start_times[i] = time.time()
             
             # Collect results as they complete
             for future in as_completed(future_to_sandbox):
@@ -657,6 +692,8 @@ def execute():
                 try:
                     sandbox = future.result()
                     if sandbox:
+                        # Store the creation start time with the sandbox
+                        sandbox.creation_start_time = sandbox_start_times[sandbox_id]
                         print(f"DEBUG: Created and prepared sandbox {sandbox_id+1}: {sandbox}")
                         sandboxes.append(sandbox)
                 except Exception as e:
@@ -673,11 +710,39 @@ def execute():
             try:
                 print(f"DEBUG: Processing sandbox {sandbox_id+1}...")
                 result = generate_and_execute_code(sandbox, user_input, task_runner_path)
-                print(f"DEBUG: Result from sandbox {sandbox_id+1}: {result}")
+                
+                # Add sandbox creation time to result
+                result['sandbox_creation_time'] = getattr(sandbox, 'creation_time', 0)
+                result['total_prep_time'] = getattr(sandbox, 'total_prep_time', 0)
+                
+                # Calculate total sandbox time from the very beginning of sandbox creation
+                # This represents the complete sandbox lifetime from request to completion
+                if hasattr(sandbox, 'creation_start_time'):
+                    result['total_sandbox_time'] = time.time() - sandbox.creation_start_time
+                    print(f"DEBUG: Total sandbox {sandbox_id+1} lifetime: {result['total_sandbox_time']:.2f}s")
+                elif 'sandbox_start_time' in result:
+                    # Fallback if we don't have creation_start_time
+                    result['total_sandbox_time'] = time.time() - result['sandbox_start_time']
+                    # Remove the temporary start timestamp as it's no longer needed
+                    del result['sandbox_start_time']
+                
+                # Add task information
+                result['sandbox_id'] = sandbox_id + 1
+                
+                print(f"DEBUG: Result from sandbox {sandbox_id+1} (exec time: {result.get('execution_time', 0):.2f}s): {result}")
                 return result
             except Exception as e:
                 print(f"DEBUG: Error processing sandbox {sandbox_id+1}: {str(e)}")
-                return {"error": str(e), "generated_code": "Error", "execution_output": str(e)}
+                return {
+                    "error": str(e), 
+                    "generated_code": "Error", 
+                    "execution_output": str(e),
+                    "sandbox_id": sandbox_id + 1,
+                    "sandbox_creation_time": getattr(sandbox, 'creation_time', 0),
+                    "sandbox_prep_time": getattr(sandbox, 'prep_time', 0),
+                    "total_prep_time": getattr(sandbox, 'total_prep_time', 0),
+                    "execution_time": 0
+                }
         
         # Process all sandboxes concurrently
         with ThreadPoolExecutor(max_workers=5) as executor:
@@ -734,10 +799,17 @@ def execute():
             "evaluation": {"evaluation": f"Error: {str(e)}"}
         })
     
+    # Calculate total execution time
+    total_execution_time = time.time() - start_time
+    timing_data["total_execution_time"] = total_execution_time
+    
+    print(f"DEBUG: Total execution time: {total_execution_time:.2f}s")
     print("DEBUG: Returning results to client")
+    
     return jsonify({
         "results": results,
-        "evaluation": evaluation
+        "evaluation": evaluation,
+        "timing_data": timing_data
     })
 
 @app.route('/test', methods=['POST'])

@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Labruno - Code Generation Sandbox</title>
+    <title>Generate and Evaluate Python Code with LLaMA 4</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-8">
-        <h1 class="text-3xl font-bold text-center my-8">Labruno</h1>
-        <p class="text-center mb-8 text-gray-600">Generate and evaluate Python code using LLaMA 4 in multiple sandboxes</p>
+        <h1 class="text-3xl font-bold text-center my-8">Generate and Evaluate Python Code</h1>
+        <p class="text-center mb-8 text-gray-600">Powered by LLaMA 4 on Groq and Daytona Sandboxes</p>
         
         <div id="testModeBanner" class="hidden max-w-2xl mx-auto mb-4 bg-yellow-100 border-l-4 border-yellow-500 p-4">
             <div class="flex">
@@ -65,6 +65,29 @@
             
             <div id="results" class="hidden mt-6">
                 <h2 class="text-xl font-semibold mb-4">Results</h2>
+                
+                <!-- Overall Performance Metrics -->
+                <div id="overallTimingInfo" class="mb-6 p-4 bg-blue-50 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-2">Performance Summary</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-white p-3 rounded shadow-sm">
+                            <div class="text-sm text-gray-500">Total Time</div>
+                            <div id="totalExecutionTime" class="text-xl font-semibold">-</div>
+                        </div>
+                        <div class="bg-white p-3 rounded shadow-sm">
+                            <div class="text-sm text-gray-500">Avg Sandbox Creation</div>
+                            <div id="avgSandboxCreation" class="text-xl font-semibold">-</div>
+                        </div>
+                        <div class="bg-white p-3 rounded shadow-sm">
+                            <div class="text-sm text-gray-500">Avg Code Generation</div>
+                            <div id="avgGroqTime" class="text-xl font-semibold">-</div>
+                        </div>
+                        <div class="bg-white p-3 rounded shadow-sm">
+                            <div class="text-sm text-gray-500">Sandboxes Created</div>
+                            <div id="sandboxCount" class="text-xl font-semibold">-</div>
+                        </div>
+                    </div>
+                </div>
                 
                 <div class="mb-6">
                     <h3 class="text-lg font-semibold mb-2">Best Implementation</h3>
@@ -158,6 +181,35 @@
                     bestOutputPreview.style.display = 'none';
                 }
                 
+                // Calculate and display performance metrics
+                if (data.results && data.results.length > 0 && data.timing_data) {
+                    // Format time function (ms for < 1s, s for >= 1s)
+                    const formatTime = (seconds) => {
+                        if (seconds < 1) {
+                            return Math.round(seconds * 1000) + 'ms';
+                        } else {
+                            return seconds.toFixed(2) + 's';
+                        }
+                    };
+                    
+                    // Display total execution time
+                    document.getElementById('totalExecutionTime').textContent = 
+                        formatTime(data.timing_data.total_execution_time || 0);
+                    
+                    // Calculate average sandbox creation time
+                    const creationTimes = data.results.map(r => r.sandbox_creation_time || 0);
+                    const avgCreationTime = creationTimes.reduce((a, b) => a + b, 0) / creationTimes.length;
+                    document.getElementById('avgSandboxCreation').textContent = formatTime(avgCreationTime);
+                    
+                    // Calculate average GROQ API time
+                    const groqTimes = data.results.map(r => r.groq_time || 0);
+                    const avgGroqTime = groqTimes.reduce((a, b) => a + b, 0) / groqTimes.length;
+                    document.getElementById('avgGroqTime').textContent = formatTime(avgGroqTime);
+                    
+                    // Display sandbox count
+                    document.getElementById('sandboxCount').textContent = data.results.length;
+                }
+                
                 // Clear previous implementations
                 implementationsContainer.innerHTML = '';
                 
@@ -191,6 +243,50 @@
                         
                         const content = document.createElement('div');
                         content.className = 'p-4 space-y-2';
+                        
+                        // Performance metrics section
+                        const metricsSection = document.createElement('div');
+                        metricsSection.className = 'bg-blue-50 p-3 rounded text-sm mb-3';
+                        
+                        const metricsLabel = document.createElement('h4');
+                        metricsLabel.className = 'font-medium text-sm mb-1';
+                        metricsLabel.textContent = 'Performance Metrics:';
+                        metricsSection.appendChild(metricsLabel);
+                        
+                        const metricsGrid = document.createElement('div');
+                        metricsGrid.className = 'grid grid-cols-2 gap-x-2 gap-y-1 text-xs';
+                        
+                        // Add metrics in grid format
+                        // Function to format time (ms for < 1s, s for >= 1s)
+                        const formatTimeValue = (seconds) => {
+                            if (seconds < 1) {
+                                return Math.round(seconds * 1000) + 'ms';
+                            } else {
+                                return seconds.toFixed(2) + 's';
+                            }
+                        };
+                        
+                        const metrics = [
+                            {label: 'Sandbox Creation:', value: formatTimeValue(result.sandbox_creation_time || 0)},
+                            {label: 'Code Generation (GROQ):', value: formatTimeValue(result.groq_time || 0)},
+                            {label: 'Total Generation Time:', value: formatTimeValue(result.code_generation_time || 0)},
+                            {label: 'Total Sandbox Time:', value: formatTimeValue(result.total_sandbox_time || 0)}
+                        ];
+                        
+                        metrics.forEach(metric => {
+                            const labelDiv = document.createElement('div');
+                            labelDiv.className = 'text-gray-600';
+                            labelDiv.textContent = metric.label;
+                            
+                            const valueDiv = document.createElement('div');
+                            valueDiv.textContent = metric.value;
+                            
+                            metricsGrid.appendChild(labelDiv);
+                            metricsGrid.appendChild(valueDiv);
+                        });
+                        
+                        metricsSection.appendChild(metricsGrid);
+                        content.appendChild(metricsSection);
                         
                         // Error message if there is one
                         if (result.error) {
