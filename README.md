@@ -2,7 +2,7 @@
 
 Labruno is an agent coordinator that creates multiple AI solutions to your coding tasks using parallel sandboxes and evaluates them to find the best implementation.
 
-![Labruno Demo Screenshot](https://via.placeholder.com/800x450.png?text=Labruno+Demo)
+![Labruno Demo Screenshot](/assets/labruno.jpg)
 
 ## What is Labruno?
 
@@ -59,9 +59,9 @@ GROQ_API_KEY=your_key_here
 
 ## Using Labruno
 
-1. Open http://127.0.0.1:5000 in your browser
+1. Open http://127.0.0.1:5001 in your browser
 2. Type a coding task like "write a function to find prime numbers"
-3. Click "Generate and Execute"
+3. Click "Generate and Execute Code"
 4. See multiple solutions and the AI's evaluation of the best one
 
 ## How Labruno Works
