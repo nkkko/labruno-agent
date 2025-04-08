@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generate and Evaluate Python Code with LLaMA 4</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-8">
@@ -74,6 +76,47 @@
                 <p class="mt-1 text-sm text-gray-500">This may take 1-2 minutes</p>
             </div>
             
+            <div id="sandboxVisualization" class="hidden mt-6">
+                <h3 class="text-lg font-medium mb-2">Sandbox Status</h3>
+                <div id="visualizationContainer" class="h-64 bg-gray-50 rounded-lg p-4 relative">
+                    <!-- D3 visualization will be rendered here -->
+                </div>
+                <div class="flex flex-wrap gap-3 mt-2 text-xs justify-center">
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-gray-200 border border-gray-500 mr-1"></div>
+                        <span>Pending</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-blue-100 border border-blue-500 mr-1"></div>
+                        <span>Creating</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-yellow-100 border border-yellow-500 mr-1"></div>
+                        <span>Preparing</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-blue-200 border border-blue-600 mr-1"></div>
+                        <span>Ready</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-purple-100 border border-purple-500 mr-1"></div>
+                        <span>Generating</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-indigo-100 border border-indigo-500 mr-1"></div>
+                        <span>Executing</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-green-100 border border-green-500 mr-1"></div>
+                        <span>Complete</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-red-100 border border-red-500 mr-1"></div>
+                        <span>Error</span>
+                    </div>
+                </div>
+            </div>
+            
             <div id="errorContainer" class="hidden mt-6 p-4 bg-red-50 border-l-4 border-red-500">
                 <h3 class="text-lg font-medium text-red-800">Error</h3>
                 <div id="errorMessage" class="mt-2 text-sm text-red-700"></div>
@@ -123,6 +166,296 @@
     </div>
     
     <script>
+        // Initialize socket connection
+        let socket;
+        let currentSessionId = null;
+        let sandboxNodes = [];
+        let simulation;
+    
+        try {
+            socket = io();
+            console.log("SocketIO connection established");
+        } catch (e) {
+            console.error("Failed to connect to SocketIO:", e);
+        }
+        
+        // Socket event handlers
+        if (socket) {
+            socket.on('connect', function() {
+                console.log('Connected to server');
+            });
+            
+            socket.on('sandbox_status', function(data) {
+                console.log('Received sandbox status update:', data);
+                
+                // If this is a new session, show the visualization
+                if (currentSessionId !== data.session_id) {
+                    currentSessionId = data.session_id;
+                    // Ensure we have the visualization ready
+                    if (sandboxNodes.length === 0) {
+                        const sandboxCount = parseInt(document.getElementById('sandbox_count').value);
+                        initVisualization(sandboxCount);
+                    }
+                }
+                
+                // Show visualization container
+                document.getElementById('sandboxVisualization').classList.remove('hidden');
+                
+                // Update visualization
+                updateSandboxStatus(data.sandbox_id, data.status, data.progress);
+            });
+        }
+        
+        // Initialize the visualization
+        function initVisualization(sandboxCount) {
+            // Clear previous visualization
+            d3.select("#visualizationContainer").selectAll("*").remove();
+            
+            // Get container dimensions
+            const container = document.getElementById('visualizationContainer');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            
+            // Create SVG container
+            const svg = d3.select("#visualizationContainer")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+                
+            // Initialize nodes for each sandbox
+            sandboxNodes = Array.from({length: sandboxCount}, (_, i) => ({
+                id: i,
+                status: 'pending',
+                progress: 0,
+                x: Math.random() * width * 0.7 + width * 0.15,
+                y: Math.random() * height * 0.7 + height * 0.15,
+                r: 25
+            }));
+            
+            // Create a central node
+            const centerNode = {
+                id: 'center',
+                x: width / 2,
+                y: height / 2,
+                fixed: true,
+                r: 15,
+                status: 'main'
+            };
+            
+            // Create links from center to each sandbox
+            const links = sandboxNodes.map(node => ({
+                source: centerNode,
+                target: node
+            }));
+            
+            // Add center node to the nodes array
+            const allNodes = [centerNode, ...sandboxNodes];
+            
+            // Create force simulation
+            simulation = d3.forceSimulation(allNodes)
+                .force("link", d3.forceLink(links).id(d => d.id).distance(100))
+                .force("charge", d3.forceManyBody().strength(-200))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("collision", d3.forceCollide().radius(d => (d.r || 25) + 10))
+                .on("tick", ticked);
+            
+            // Add links
+            const link = svg.append("g")
+                .attr("class", "links")
+                .selectAll("line")
+                .data(links)
+                .enter()
+                .append("line")
+                .attr("stroke", "#d1d5db")
+                .attr("stroke-width", 1.5)
+                .attr("stroke-dasharray", "4,4");
+            
+            // Add nodes
+            const node = svg.append("g")
+                .attr("class", "nodes")
+                .selectAll(".node")
+                .data(allNodes)
+                .enter()
+                .append("g")
+                .attr("class", d => `node node-${d.id}`)
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended));
+            
+            // Add circles for each node
+            node.append("circle")
+                .attr("r", d => d.r || 25)
+                .attr("fill", d => d.id === 'center' ? "#4f46e5" : "#e5e7eb")
+                .attr("stroke", d => d.id === 'center' ? "#ffffff" : "#6366f1")
+                .attr("stroke-width", 2)
+                .attr("class", d => `node-circle node-circle-${d.id}`);
+                
+            // Add labels
+            node.append("text")
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "central")
+                .attr("fill", d => d.id === 'center' ? "#ffffff" : "#374151")
+                .attr("font-size", d => d.id === 'center' ? "10px" : "12px")
+                .attr("font-weight", "bold")
+                .text(d => d.id === 'center' ? "Main" : `#${d.id+1}`);
+                
+            // Add progress arcs
+            node.filter(d => d.id !== 'center')
+                .append("path")
+                .attr("class", d => `progress-arc progress-arc-${d.id}`)
+                .attr("fill", "none")
+                .attr("stroke", "#6366f1")
+                .attr("stroke-width", 3)
+                .attr("stroke-linecap", "round");
+                
+            // Add tooltips
+            node.append("title")
+                .text(d => d.id === 'center' ? "Main Coordinator" : `Sandbox #${d.id+1}\nStatus: ${d.status}\nProgress: ${d.progress}%`);
+                
+            // Animation on creation
+            node.attr("opacity", 0)
+                .transition()
+                .duration(500)
+                .delay((d, i) => i * 100)
+                .attr("opacity", 1);
+                
+            function ticked() {
+                link
+                    .attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+                    
+                node
+                    .attr("transform", d => `translate(${d.x},${d.y})`);
+                    
+                // Update progress arcs
+                updateProgressArcs();
+            }
+            
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+            
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+            
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                if (d.id !== 'center') {
+                    d.fx = null;
+                    d.fy = null;
+                }
+            }
+            
+            // Initial update of progress arcs
+            updateProgressArcs();
+        }
+        
+        // Update sandbox status in visualization
+        function updateSandboxStatus(sandboxId, status, progress) {
+            // Find the node
+            const node = sandboxNodes.find(n => n.id === sandboxId);
+            if (!node) return;
+            
+            // Update node data
+            node.status = status;
+            node.progress = progress;
+            
+            // Update node appearance
+            updateNodeAppearance(sandboxId);
+            
+            // Update progress arcs
+            updateProgressArcs();
+            
+            // Update tooltip
+            d3.select(`.node-${sandboxId} title`)
+                .text(`Sandbox #${sandboxId+1}\nStatus: ${status}\nProgress: ${progress}%`);
+        }
+        
+        // Update the appearance of a node based on its status
+        function updateNodeAppearance(sandboxId) {
+            const node = sandboxNodes.find(n => n.id === sandboxId);
+            if (!node) return;
+            
+            // Select the node circle
+            const circle = d3.select(`.node-circle-${sandboxId}`);
+            
+            // Define colors based on status
+            let fillColor = "#e5e7eb"; // default gray
+            let strokeColor = "#6366f1"; // default indigo
+            
+            switch (node.status) {
+                case 'pending':
+                    fillColor = "#e5e7eb"; // gray
+                    strokeColor = "#6b7280"; // dark gray
+                    break;
+                case 'creating':
+                    fillColor = "#dbeafe"; // light blue
+                    strokeColor = "#3b82f6"; // blue
+                    break;
+                case 'preparing':
+                    fillColor = "#fef3c7"; // light amber
+                    strokeColor = "#d97706"; // amber
+                    break;
+                case 'ready':
+                    fillColor = "#bbf7d0"; // light blue
+                    strokeColor = "#4f46e5"; // indigo
+                    break;
+                case 'generating':
+                    fillColor = "#f3e8ff"; // light purple
+                    strokeColor = "#a855f7"; // purple
+                    break;
+                case 'executing':
+                    fillColor = "#e0e7ff"; // light indigo
+                    strokeColor = "#6366f1"; // indigo
+                    break;
+                case 'complete':
+                    fillColor = "#d1fae5"; // light emerald
+                    strokeColor = "#10b981"; // emerald
+                    break;
+                case 'error':
+                    fillColor = "#fee2e2"; // light red
+                    strokeColor = "#ef4444"; // red
+                    break;
+            }
+            
+            // Update colors with transition
+            circle.transition()
+                .duration(300)
+                .attr("fill", fillColor)
+                .attr("stroke", strokeColor);
+                
+            // Add pulse effect on status change
+            circle.transition()
+                .duration(300)
+                .attr("r", 30)
+                .transition()
+                .duration(300)
+                .attr("r", 25);
+        }
+        
+        // Update progress arcs for all nodes
+        function updateProgressArcs() {
+            sandboxNodes.forEach(node => {
+                if (node.progress > 0) {
+                    const arcGenerator = d3.arc()
+                        .innerRadius(23)
+                        .outerRadius(27)
+                        .startAngle(0)
+                        .endAngle(node.progress * Math.PI * 2 / 100);
+                        
+                    d3.select(`.progress-arc-${node.id}`)
+                        .attr("d", arcGenerator());
+                }
+            });
+        }
+        
         // Check if in test mode by looking for the URL parameter
         if (window.location.href.includes('/test')) {
             document.getElementById('testModeBanner').classList.remove('hidden');
@@ -132,6 +465,7 @@
             e.preventDefault();
             
             const userInput = document.getElementById('user_input').value;
+            const sandboxCount = parseInt(document.getElementById('sandbox_count').value);
             const submitButton = document.getElementById('submitButton');
             const loadingIndicator = document.getElementById('loadingIndicator');
             const resultsContainer = document.getElementById('results');
@@ -139,6 +473,10 @@
             const errorMessage = document.getElementById('errorMessage');
             const evaluationResult = document.getElementById('evaluationResult');
             const implementationsContainer = document.getElementById('implementationsContainer');
+            
+            // Reset visualization
+            sandboxNodes = [];
+            currentSessionId = null;
             
             // Show loading indicator and disable submit button
             loadingIndicator.classList.remove('hidden');

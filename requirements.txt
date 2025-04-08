@@ -3,3 +3,4 @@ flask-tailwind
 python-dotenv
 daytona-sdk
 groq
+flask-socketio>=5.5.1

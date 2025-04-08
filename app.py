@@ -3,7 +3,9 @@ import uuid
 import json
 import tempfile
 import time
+import threading
 from flask import Flask, render_template, request, jsonify
+from flask_socketio import SocketIO, emit
 from dotenv import load_dotenv
 from daytona_sdk import Daytona, DaytonaConfig, CreateSandboxParams
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -29,6 +31,9 @@ print(f"GROQ_API_KEY: {'Present' if os.environ.get('GROQ_API_KEY') else 'Missing
 # Initialize Flask app
 app = Flask(__name__)
 app.config["TAILWIND_DEV"] = True
+
+# Initialize SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Initialize Daytona client
 daytona_api_key = os.environ.get("DAYTONA_API_KEY")
@@ -606,6 +611,9 @@ def execute():
     evaluation = {"error": "Not started"}
     timing_data = {}
     
+    # Generate a unique session ID for this execution run
+    session_id = str(uuid.uuid4())
+    
     # Validate input and sandbox count
     if not user_input:
         return jsonify({"error": "No input provided"}), 400
@@ -616,6 +624,21 @@ def execute():
             sandbox_count = 3  # Default to 3 if out of range
     except ValueError:
         sandbox_count = 3  # Default to 3 if not a valid number
+        
+    # Initialize sandbox status tracking
+    sandbox_status = {}
+    for i in range(sandbox_count):
+        sandbox_status[i] = {
+            'status': 'pending',
+            'progress': 0
+        }
+        # Emit initial pending status for each sandbox
+        socketio.emit('sandbox_status', {
+            'session_id': session_id,
+            'sandbox_id': i,
+            'status': 'pending',
+            'progress': 0
+        })
     
     try:
         print(f"DEBUG: Starting execution with input: {user_input}")
@@ -670,17 +693,66 @@ def execute():
         # Function to create and prepare a sandbox concurrently
         def create_and_prepare_sandbox():
             try:
+                # Get the sandbox ID from the thread context
+                sandbox_id = getattr(threading.current_thread(), 'sandbox_id', -1)
+                
+                # Update status to creating
+                if sandbox_id >= 0:
+                    sandbox_status[sandbox_id]['status'] = 'creating'
+                    sandbox_status[sandbox_id]['progress'] = 20
+                    socketio.emit('sandbox_status', {
+                        'session_id': session_id,
+                        'sandbox_id': sandbox_id,
+                        'status': 'creating',
+                        'progress': 20
+                    })
+                
                 # Sandbox creation is already timed inside the function
                 sandbox = create_sandbox()
+                
+                # Update status to preparing
+                if sandbox_id >= 0:
+                    sandbox_status[sandbox_id]['status'] = 'preparing'
+                    sandbox_status[sandbox_id]['progress'] = 40
+                    socketio.emit('sandbox_status', {
+                        'session_id': session_id,
+                        'sandbox_id': sandbox_id,
+                        'status': 'preparing',
+                        'progress': 40
+                    })
+                
                 prepared_sandbox = prepare_sandbox(sandbox, task_runner_code)
                 
                 # Calculate total sandbox preparation time
                 total_prep_time = getattr(sandbox, 'creation_time', 0) + getattr(prepared_sandbox, 'prep_time', 0)
                 prepared_sandbox.total_prep_time = total_prep_time
                 
+                # Update status to ready
+                if sandbox_id >= 0:
+                    sandbox_status[sandbox_id]['status'] = 'ready'
+                    sandbox_status[sandbox_id]['progress'] = 60
+                    socketio.emit('sandbox_status', {
+                        'session_id': session_id,
+                        'sandbox_id': sandbox_id,
+                        'status': 'ready',
+                        'progress': 60
+                    })
+                
                 return prepared_sandbox
             except Exception as e:
                 print(f"DEBUG: Error creating and preparing sandbox: {str(e)}")
+                
+                # Update status to error
+                if sandbox_id >= 0:
+                    sandbox_status[sandbox_id]['status'] = 'error'
+                    sandbox_status[sandbox_id]['progress'] = 0
+                    socketio.emit('sandbox_status', {
+                        'session_id': session_id,
+                        'sandbox_id': sandbox_id,
+                        'status': 'error',
+                        'progress': 0
+                    })
+                
                 return None
         
         # Store sandbox creation start time
@@ -688,8 +760,17 @@ def execute():
         
         # Create sandboxes concurrently
         with ThreadPoolExecutor(max_workers=10) as executor:
-            # Submit sandbox creation tasks
-            future_to_sandbox = {executor.submit(create_and_prepare_sandbox): i for i in range(sandbox_count)}
+            # Submit sandbox creation tasks with thread local storage for sandbox_id
+            future_to_sandbox = {}
+            for i in range(sandbox_count):
+                # Create a function that will set thread-local sandbox_id
+                def task_with_id():
+                    # Set the sandbox_id on the thread
+                    threading.current_thread().sandbox_id = i
+                    return create_and_prepare_sandbox()
+                
+                future = executor.submit(task_with_id)
+                future_to_sandbox[future] = i
             
             # Track start time for each sandbox
             for i in range(sandbox_count):
@@ -703,6 +784,7 @@ def execute():
                     if sandbox:
                         # Store the creation start time with the sandbox
                         sandbox.creation_start_time = sandbox_start_times[sandbox_id]
+                        sandbox.sandbox_id = sandbox_id  # Store sandbox_id for later reference
                         print(f"DEBUG: Created and prepared sandbox {sandbox_id+1}: {sandbox}")
                         sandboxes.append(sandbox)
                 except Exception as e:
@@ -718,7 +800,29 @@ def execute():
             sandbox, sandbox_id = sandbox_with_id
             try:
                 print(f"DEBUG: Processing sandbox {sandbox_id+1}...")
+                
+                # Update status to generating
+                sandbox_status[sandbox_id]['status'] = 'generating'
+                sandbox_status[sandbox_id]['progress'] = 70
+                socketio.emit('sandbox_status', {
+                    'session_id': session_id,
+                    'sandbox_id': sandbox_id,
+                    'status': 'generating',
+                    'progress': 70
+                })
+                
+                # Start code generation
                 result = generate_and_execute_code(sandbox, user_input, task_runner_path)
+                
+                # Update status to executing
+                sandbox_status[sandbox_id]['status'] = 'executing'
+                sandbox_status[sandbox_id]['progress'] = 85
+                socketio.emit('sandbox_status', {
+                    'session_id': session_id,
+                    'sandbox_id': sandbox_id,
+                    'status': 'executing',
+                    'progress': 85
+                })
                 
                 # Add sandbox creation time to result
                 result['sandbox_creation_time'] = getattr(sandbox, 'creation_time', 0)
@@ -738,10 +842,34 @@ def execute():
                 # Add task information
                 result['sandbox_id'] = sandbox_id + 1
                 
+                # Update status to complete
+                status = 'error' if result.get('error') or result.get('execution_result') != 'Success' else 'complete'
+                progress = 100 if status == 'complete' else 90
+                
+                sandbox_status[sandbox_id]['status'] = status
+                sandbox_status[sandbox_id]['progress'] = progress
+                socketio.emit('sandbox_status', {
+                    'session_id': session_id,
+                    'sandbox_id': sandbox_id,
+                    'status': status,
+                    'progress': progress
+                })
+                
                 print(f"DEBUG: Result from sandbox {sandbox_id+1} (exec time: {result.get('execution_time', 0):.2f}s): {result}")
                 return result
             except Exception as e:
                 print(f"DEBUG: Error processing sandbox {sandbox_id+1}: {str(e)}")
+                
+                # Update status to error
+                sandbox_status[sandbox_id]['status'] = 'error'
+                sandbox_status[sandbox_id]['progress'] = 0
+                socketio.emit('sandbox_status', {
+                    'session_id': session_id,
+                    'sandbox_id': sandbox_id,
+                    'status': 'error',
+                    'progress': 0
+                })
+                
                 return {
                     "error": str(e), 
                     "generated_code": "Error", 
@@ -827,6 +955,9 @@ def test_mode():
     user_input = request.form.get('user_input')
     sandbox_count = request.form.get('sandbox_count', '3')
     
+    # Generate a unique session ID for this execution run
+    session_id = str(uuid.uuid4())
+    
     if not user_input:
         return jsonify({"error": "No input provided"}), 400
     
@@ -838,6 +969,77 @@ def test_mode():
         sandbox_count = 3  # Default to 3 if not a valid number
     
     print(f"DEBUG: Test mode activated with input: {user_input}, sandbox count: {sandbox_count}")
+    
+    # Initialize sandbox status for visualization
+    for i in range(sandbox_count):
+        # Emit initial sandbox status
+        socketio.emit('sandbox_status', {
+            'session_id': session_id,
+            'sandbox_id': i,
+            'status': 'pending',
+            'progress': 0
+        })
+    
+    # Emit status updates with delays to simulate real sandbox creation
+    def emit_test_updates():
+        import time
+        for i in range(sandbox_count):
+            # Creating
+            socketio.emit('sandbox_status', {
+                'session_id': session_id,
+                'sandbox_id': i,
+                'status': 'creating',
+                'progress': 20
+            })
+            time.sleep(0.3)
+            
+            # Preparing
+            socketio.emit('sandbox_status', {
+                'session_id': session_id,
+                'sandbox_id': i,
+                'status': 'preparing',
+                'progress': 40
+            })
+            time.sleep(0.3)
+            
+            # Ready
+            socketio.emit('sandbox_status', {
+                'session_id': session_id,
+                'sandbox_id': i,
+                'status': 'ready',
+                'progress': 60
+            })
+            time.sleep(0.3)
+            
+            # Generating code
+            socketio.emit('sandbox_status', {
+                'session_id': session_id,
+                'sandbox_id': i,
+                'status': 'generating',
+                'progress': 70
+            })
+            time.sleep(0.5)
+            
+            # Executing
+            socketio.emit('sandbox_status', {
+                'session_id': session_id,
+                'sandbox_id': i,
+                'status': 'executing',
+                'progress': 85
+            })
+            time.sleep(0.5)
+            
+            # Complete
+            socketio.emit('sandbox_status', {
+                'session_id': session_id,
+                'sandbox_id': i,
+                'status': 'complete',
+                'progress': 100
+            })
+    
+    # Start emitting updates in a background thread
+    import threading
+    threading.Thread(target=emit_test_updates, daemon=True).start()
     
     # Create dummy results
     results = []
@@ -919,10 +1121,15 @@ if __name__ == '__main__':
             print(f"Error updating index.html: {str(e)}")
     
     try:
-        # Run without debug mode to prevent auto-reloading when temporary files are created
-        # This is important to prevent Flask from restarting when we create the modified task runner
-        app.run(debug=False)
-    except OSError:
-        # If port 5000 is in use, try port 5001
-        print("Port 5000 is in use, trying port 5001...")
-        app.run(debug=False, port=5001)
+        # Run with SocketIO instead of the Flask built-in server
+        # This is important for WebSocket support
+        port = 5000
+        try:
+            socketio.run(app, debug=False, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
+        except OSError:
+            # If port 5000 is in use, try port 5001
+            port = 5001
+            print("Port 5000 is in use, trying port 5001...")
+            socketio.run(app, debug=False, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
+    except Exception as e:
+        print(f"Error starting the server: {str(e)}")
