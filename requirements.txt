@@ -1,0 +1,5 @@
+flask
+flask-tailwind
+python-dotenv
+daytona-sdk
+groq
