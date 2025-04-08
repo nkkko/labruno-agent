@@ -624,13 +624,24 @@ def execute():
             'status': 'pending',
             'progress': 0
         }
-        # Emit initial pending status for each sandbox
-        socketio.emit('sandbox_status', {
-            'session_id': session_id,
-            'sandbox_id': i,
-            'status': 'pending',
-            'progress': 0
-        })
+        
+    # Send all sandbox statuses at once with a small delay
+    # This helps ensure the frontend receives them properly
+    def emit_initial_status():
+        print(f"DEBUG: Emitting initial status for {sandbox_count} sandboxes with session ID {session_id}")
+        import time
+        for i in range(sandbox_count):
+            time.sleep(0.1)  # Small delay to ensure reliable delivery
+            socketio.emit('sandbox_status', {
+                'session_id': session_id,
+                'sandbox_id': i,
+                'status': 'pending',
+                'progress': 0
+            })
+            
+    # Start emitting in a background thread to not block request
+    import threading
+    threading.Thread(target=emit_initial_status).start()
     
     try:
         print(f"DEBUG: Starting execution with input: {user_input}")
@@ -963,14 +974,24 @@ def test_mode():
     print(f"DEBUG: Test mode activated with input: {user_input}, sandbox count: {sandbox_count}")
     
     # Initialize sandbox status for visualization
-    for i in range(sandbox_count):
-        # Emit initial sandbox status
-        socketio.emit('sandbox_status', {
-            'session_id': session_id,
-            'sandbox_id': i,
-            'status': 'pending',
-            'progress': 0
-        })
+    print(f"DEBUG: Test mode - emitting initial status for {sandbox_count} sandboxes with session ID {session_id}")
+    
+    # Send all sandbox statuses at once with a small delay
+    # This helps ensure the frontend receives them properly
+    def emit_initial_test_status():
+        import time
+        for i in range(sandbox_count):
+            time.sleep(0.1)  # Small delay to ensure reliable delivery
+            socketio.emit('sandbox_status', {
+                'session_id': session_id,
+                'sandbox_id': i,
+                'status': 'pending',
+                'progress': 0
+            })
+            
+    # Start emitting in a background thread to not block request
+    import threading
+    threading.Thread(target=emit_initial_test_status).start()
     
     # Emit status updates with delays to simulate real sandbox creation
     def emit_test_updates():

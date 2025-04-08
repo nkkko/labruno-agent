@@ -1,137 +1,103 @@
 # Labruno 🧪🔍
 
-A Python application that leverages Daytona sandboxes and Groq's LLaMA 4 model to generate, execute, and evaluate multiple implementations of Python code from a single prompt.
+Labruno is an agent coordinator that creates multiple AI solutions to your coding tasks using parallel sandboxes and evaluates them to find the best implementation.
 
 ![Labruno Demo Screenshot](https://via.placeholder.com/800x450.png?text=Labruno+Demo)
 
-## Overview
+## What is Labruno?
 
-Labruno is an AI-powered code sandbox platform that:
+Labruno acts as an orchestrator that:
 
-1. Spins up multiple isolated Daytona sandbox environments concurrently
-2. Uses LLaMA 4 to generate different Python implementations of the same task
-3. Executes each implementation securely in isolated sandboxes
-4. Evaluates all implementations to determine the optimal solution
-5. Presents the results through a clean, intuitive web interface
+1. Takes your coding task and spins up multiple isolated sandboxes
+2. Asks each sandbox to generate a unique solution using LLaMA 4
+3. Executes all solutions in parallel
+4. Uses an LLM as judge to evaluate and select the best implementation
+5. Shows you all solutions with the winner highlighted
 
-Think of it as parallel AI coding with immediate execution and evaluation - letting you quickly explore different coding approaches to the same problem.
+Think of it as having multiple AI developers working on your task simultaneously, with an expert reviewer choosing the best approach.
 
-## Key Features
+## Features at a Glance
 
-- 🧠 **Multiple AI Solutions**: Generates 5 unique implementations for each task
-- 🔒 **Secure Execution**: Runs all code in isolated Daytona sandboxes
-- 🔄 **Parallel Processing**: Handles code generation and evaluation concurrently
-- 📊 **Implementation Comparison**: Analyzes which solution is most effective
-- 🖥️ **Clean Web Interface**: Simple input/output for quick experimentation
+- 🏎️ **Parallel Processing**: Creates and runs multiple sandboxes concurrently
+- 🧠 **Multiple Solutions**: Generates diverse approaches to the same problem
+- 🤖 **AI Evaluation**: Uses an LLM to judge which solution is best
+- 🔒 **Secure Execution**: Runs code in isolated Daytona sandboxes
+- ⚡ **Fast Results**: Get multiple working implementations in seconds
 
-## Prerequisites
+## Setup
 
+### Requirements
 - Python 3.8+
-- [Daytona account](https://app.daytona.io/) with API key
-- [Groq account](https://console.groq.com/) with API key
-- pip package manager
+- Daytona and Groq API keys
 
-## Quick Installation
+### Quick Start
 
 ```bash
-# Clone the repository
-git clone https://github.com/nkkko/labruno-agent.git
-cd labruno-agent
-
-# Set up virtual environment (recommended)
+# Install
+git clone https://github.com/nkkko/labruno.git
+cd labruno
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Configure environment variables
+# Configure
 cp .env.example .env
-# Edit .env with your API keys
+# Add your API keys to .env
+
+# Run
+python app.py
 ```
 
-## Configuration
+### API Keys
 
-Edit your `.env` file with the required API keys:
-
+In your `.env` file:
 ```
-DAYTONA_API_KEY=your_daytona_api_key_here
+DAYTONA_API_KEY=your_key_here
 DAYTONA_TARGET=us
-GROQ_API_KEY=your_groq_api_key_here
+GROQ_API_KEY=your_key_here
 ```
 
-- **DAYTONA_API_KEY**: Get from the [Daytona Dashboard](https://app.daytona.io/dashboard/) → API Keys → Create Key
-- **DAYTONA_TARGET**: Geographic location for sandbox creation (usually 'us')
-- **GROQ_API_KEY**: Get from [Groq Console](https://console.groq.com/) → API Keys
+## Using Labruno
 
-## Running Labruno
+1. Open http://127.0.0.1:5000 in your browser
+2. Type a coding task like "write a function to find prime numbers"
+3. Click "Generate and Execute"
+4. See multiple solutions and the AI's evaluation of the best one
 
-1. Start the application:
-   ```bash
-   python app.py
-   ```
+## How Labruno Works
 
-2. Open your browser at [http://127.0.0.1:5000](http://127.0.0.1:5000)
+1. **You provide a task**: Ask for any coding solution
+2. **Concurrent sandboxes spin up**: Multiple isolated environments are created in parallel
+3. **Each sandbox generates code**: LLaMA 4 creates a unique solution in each environment
+4. **All solutions execute**: Code runs safely in isolated sandboxes
+5. **AI judges the results**: The LLM evaluates solutions for correctness, efficiency, and style
+6. **Results presented**: You see all working solutions with the best one highlighted
 
-3. Enter a coding task like:
-   - "Sort a list of dictionaries by a value"
-   - "Create a function that calculates prime numbers"
-   - "Find the longest palindrome in a string"
+## Common Use Cases
 
-4. Click "Generate and Execute Code" and wait for your results (typically 30-60 seconds)
+- **Interview Prep**: See multiple approaches to coding problems
+- **Learning**: Compare different ways to solve the same problem
+- **Optimization**: Find the most efficient algorithm for your task
+- **Exploration**: Generate diverse implementations and understand trade-offs
 
-## Example Use Cases
+## Configuration Options
 
-- **Algorithm Exploration**: Generate multiple approaches to the same algorithm
-- **Code Optimization**: Find more efficient ways to solve a problem
-- **Learning Tool**: See different ways to implement the same functionality
-- **Interview Prep**: Practice explaining the tradeoffs between implementations
-
-## How It Works
-
-![Labruno Architecture](https://via.placeholder.com/800x400.png?text=Labruno+Architecture)
-
-1. **Request Processing**: User submits a coding task through the web interface
-2. **Sandbox Creation**: Application creates a main sandbox and 5 worker sandboxes
-3. **Code Generation**: Each sandbox uses LLaMA 4 to generate unique Python solutions
-4. **Secure Execution**: Code is executed in isolated environments with results captured
-5. **Evaluation**: All implementations are compared for correctness, efficiency, and style
-6. **Result Presentation**: The best implementation is highlighted and all results displayed
+- Modify number of parallel sandboxes in `app.py`
+- Adjust evaluation criteria by changing the ranking in `evaluate_results()`
+- Customize prompt templates in `sandbox_task_runner.py`
 
 ## Troubleshooting
 
-If you encounter issues:
+- **API Key Issues**: Ensure your Daytona and Groq API keys are correctly set in `.env`
+- **Slow Results**: For complex tasks, reduce the number of concurrent sandboxes
+- **Memory Limitations**: If you encounter memory issues, lower the `max_workers` parameter
 
-- **Empty Results**: Check that your API keys are correctly configured in `.env`
-- **Connection Errors**: Verify your internet connection and Daytona/Groq API status
-- **Timeout Errors**: For complex tasks, try simplifying your request
+## Credits
 
-## Advanced Configuration
-
-- Modify `app.py` to adjust number of parallel sandboxes
-- Edit prompt templates in `sandbox_task_runner.py` to customize code generation
-- Change timeout settings for long-running code execution
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- [Daytona](https://www.daytona.io/) for providing the sandbox environments
-- [Groq](https://groq.com/) for access to the LLaMA 4 model
-- [Flask](https://flask.palletsprojects.com/) for the web framework
+- [Daytona](https://www.daytona.io/) for sandbox environments
+- [Groq](https://groq.com/) for LLaMA 4 access
+- [Flask](https://flask.palletsprojects.com/) for the web interface
 
 ---
 
-Built with ❤️ and 🧪 by [nkkko](https://github.com/nkkko)
+Created by [nkkko](https://github.com/nkkko)

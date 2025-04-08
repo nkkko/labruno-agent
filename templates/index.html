@@ -12,7 +12,7 @@
     <div class="container mx-auto px-4 py-8">
         <h1 class="text-3xl font-bold text-center my-8">Generate and Evaluate Python Code</h1>
         <p class="text-center mb-8 text-gray-600">Powered by LLaMA 4 on Groq and Daytona Sandboxes</p>
-        
+
         <div id="testModeBanner" class="hidden max-w-2xl mx-auto mb-4 bg-yellow-100 border-l-4 border-yellow-500 p-4">
             <div class="flex">
                 <div class="flex-shrink-0">
@@ -27,7 +27,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
             <form id="codeForm" class="space-y-4" action="/execute">
                 <div class="flex flex-wrap items-center justify-between mb-1">
@@ -38,30 +38,30 @@
                         <label for="sandbox_count" class="text-sm font-medium text-gray-700 mr-2">
                             Sandboxes:
                         </label>
-                        <input 
-                            type="number" 
-                            id="sandbox_count" 
-                            name="sandbox_count" 
-                            min="1" 
-                            max="10" 
-                            value="3" 
+                        <input
+                            type="number"
+                            id="sandbox_count"
+                            name="sandbox_count"
+                            min="1"
+                            max="10"
+                            value="3"
                             class="w-16 px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                         />
                     </div>
                 </div>
                 <div>
-                    <textarea 
-                        id="user_input" 
-                        name="user_input" 
-                        rows="4" 
+                    <textarea
+                        id="user_input"
+                        name="user_input"
+                        rows="4"
                         class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                         placeholder="e.g., Create a function that sorts a list of dictionaries by a specific key"
                         required
                     ></textarea>
                 </div>
                 <div>
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         id="submitButton"
                         class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     >
@@ -69,14 +69,14 @@
                     </button>
                 </div>
             </form>
-            
+
             <div id="loadingIndicator" class="hidden mt-6 text-center">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-600"></div>
                 <p class="mt-2 text-gray-600">Processing your request in sandboxes...</p>
                 <p class="mt-1 text-sm text-gray-500">This may take 1-2 minutes</p>
             </div>
-            
-            <div id="sandboxVisualization" class="hidden mt-6">
+
+            <div id="sandboxVisualization" class="mt-6">
                 <h3 class="text-lg font-medium mb-2">Sandbox Status</h3>
                 <div id="visualizationContainer" class="h-64 bg-gray-50 rounded-lg p-4 relative">
                     <!-- D3 visualization will be rendered here -->
@@ -116,15 +116,15 @@
                     </div>
                 </div>
             </div>
-            
+
             <div id="errorContainer" class="hidden mt-6 p-4 bg-red-50 border-l-4 border-red-500">
                 <h3 class="text-lg font-medium text-red-800">Error</h3>
                 <div id="errorMessage" class="mt-2 text-sm text-red-700"></div>
             </div>
-            
+
             <div id="results" class="hidden mt-6">
                 <h2 class="text-xl font-semibold mb-4">Results</h2>
-                
+
                 <!-- Overall Performance Metrics -->
                 <div id="overallTimingInfo" class="mb-6 p-4 bg-blue-50 rounded-lg">
                     <h3 class="text-lg font-semibold mb-2">Performance Summary</h3>
@@ -147,81 +147,83 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="mb-6">
                     <h3 class="text-lg font-semibold mb-2">Best Implementation</h3>
                     <div id="evaluationResult" class="bg-gray-50 p-4 rounded-md text-sm"></div>
-                    
+
                     <div id="bestOutputPreview" class="mt-4" style="display: none;">
                         <h4 class="font-medium text-sm mb-2">Output Preview:</h4>
                         <pre id="bestOutputContent" class="bg-gray-50 p-3 rounded text-sm overflow-x-auto border border-green-200"></pre>
                     </div>
                 </div>
-                
+
                 <div class="space-y-6" id="implementationsContainer">
                     <!-- Implementation results will be added here dynamically -->
                 </div>
             </div>
         </div>
     </div>
-    
+
     <script>
         // Initialize socket connection
         let socket;
         let currentSessionId = null;
         let sandboxNodes = [];
         let simulation;
-    
+        let visualizationInitialized = false;
+
         try {
             socket = io();
             console.log("SocketIO connection established");
         } catch (e) {
             console.error("Failed to connect to SocketIO:", e);
         }
-        
+
         // Socket event handlers
         if (socket) {
             socket.on('connect', function() {
                 console.log('Connected to server');
             });
-            
+
             socket.on('sandbox_status', function(data) {
                 console.log('Received sandbox status update:', data);
-                
-                // If this is a new session, show the visualization
+
+                // If this is a new session, update the session ID
                 if (currentSessionId !== data.session_id) {
                     currentSessionId = data.session_id;
-                    // Ensure we have the visualization ready
-                    if (sandboxNodes.length === 0) {
-                        const sandboxCount = parseInt(document.getElementById('sandbox_count').value);
-                        initVisualization(sandboxCount);
-                    }
+                    console.log("New session ID:", currentSessionId);
+
+                    // Ensure visualization is shown for a new session
+                    document.getElementById('sandboxVisualization').classList.remove('hidden');
                 }
-                
-                // Show visualization container
-                document.getElementById('sandboxVisualization').classList.remove('hidden');
-                
+
                 // Update visualization
                 updateSandboxStatus(data.sandbox_id, data.status, data.progress);
             });
         }
-        
+
         // Initialize the visualization
         function initVisualization(sandboxCount) {
+            console.log("Initializing visualization with", sandboxCount, "sandboxes");
+
             // Clear previous visualization
             d3.select("#visualizationContainer").selectAll("*").remove();
-            
+
             // Get container dimensions
             const container = document.getElementById('visualizationContainer');
             const width = container.clientWidth;
             const height = container.clientHeight;
-            
+
+            // Mark visualization as initialized
+            visualizationInitialized = true;
+
             // Create SVG container
             const svg = d3.select("#visualizationContainer")
                 .append("svg")
                 .attr("width", width)
                 .attr("height", height);
-                
+
             // Initialize nodes for each sandbox
             sandboxNodes = Array.from({length: sandboxCount}, (_, i) => ({
                 id: i,
@@ -231,7 +233,7 @@
                 y: Math.random() * height * 0.7 + height * 0.15,
                 r: 25
             }));
-            
+
             // Create a central node
             const centerNode = {
                 id: 'center',
@@ -241,16 +243,16 @@
                 r: 15,
                 status: 'main'
             };
-            
+
             // Create links from center to each sandbox
             const links = sandboxNodes.map(node => ({
                 source: centerNode,
                 target: node
             }));
-            
+
             // Add center node to the nodes array
             const allNodes = [centerNode, ...sandboxNodes];
-            
+
             // Create force simulation
             simulation = d3.forceSimulation(allNodes)
                 .force("link", d3.forceLink(links).id(d => d.id).distance(100))
@@ -258,7 +260,7 @@
                 .force("center", d3.forceCenter(width / 2, height / 2))
                 .force("collision", d3.forceCollide().radius(d => (d.r || 25) + 10))
                 .on("tick", ticked);
-            
+
             // Add links
             const link = svg.append("g")
                 .attr("class", "links")
@@ -269,7 +271,7 @@
                 .attr("stroke", "#d1d5db")
                 .attr("stroke-width", 1.5)
                 .attr("stroke-dasharray", "4,4");
-            
+
             // Add nodes
             const node = svg.append("g")
                 .attr("class", "nodes")
@@ -282,7 +284,7 @@
                     .on("start", dragstarted)
                     .on("drag", dragged)
                     .on("end", dragended));
-            
+
             // Add circles for each node
             node.append("circle")
                 .attr("r", d => d.r || 25)
@@ -290,7 +292,7 @@
                 .attr("stroke", d => d.id === 'center' ? "#ffffff" : "#6366f1")
                 .attr("stroke-width", 2)
                 .attr("class", d => `node-circle node-circle-${d.id}`);
-                
+
             // Add labels
             node.append("text")
                 .attr("text-anchor", "middle")
@@ -299,7 +301,7 @@
                 .attr("font-size", d => d.id === 'center' ? "10px" : "12px")
                 .attr("font-weight", "bold")
                 .text(d => d.id === 'center' ? "Main" : `#${d.id+1}`);
-                
+
             // Add progress arcs
             node.filter(d => d.id !== 'center')
                 .append("path")
@@ -308,43 +310,43 @@
                 .attr("stroke", "#6366f1")
                 .attr("stroke-width", 3)
                 .attr("stroke-linecap", "round");
-                
+
             // Add tooltips
             node.append("title")
                 .text(d => d.id === 'center' ? "Main Coordinator" : `Sandbox #${d.id+1}\nStatus: ${d.status}\nProgress: ${d.progress}%`);
-                
+
             // Animation on creation
             node.attr("opacity", 0)
                 .transition()
                 .duration(500)
                 .delay((d, i) => i * 100)
                 .attr("opacity", 1);
-                
+
             function ticked() {
                 link
                     .attr("x1", d => d.source.x)
                     .attr("y1", d => d.source.y)
                     .attr("x2", d => d.target.x)
                     .attr("y2", d => d.target.y);
-                    
+
                 node
                     .attr("transform", d => `translate(${d.x},${d.y})`);
-                    
+
                 // Update progress arcs
                 updateProgressArcs();
             }
-            
+
             function dragstarted(event, d) {
                 if (!event.active) simulation.alphaTarget(0.3).restart();
                 d.fx = d.x;
                 d.fy = d.y;
             }
-            
+
             function dragged(event, d) {
                 d.fx = event.x;
                 d.fy = event.y;
             }
-            
+
             function dragended(event, d) {
                 if (!event.active) simulation.alphaTarget(0);
                 if (d.id !== 'center') {
@@ -352,44 +354,57 @@
                     d.fy = null;
                 }
             }
-            
+
             // Initial update of progress arcs
             updateProgressArcs();
         }
-        
+
         // Update sandbox status in visualization
         function updateSandboxStatus(sandboxId, status, progress) {
+            console.log(`Updating sandbox ${sandboxId} status: ${status}, progress: ${progress}`);
+
+            // Make sure the visualization is initialized
+            if (!visualizationInitialized) {
+                console.log("Visualization not initialized yet, initializing now");
+                const sandboxCount = parseInt(document.getElementById('sandbox_count').value) || 3;
+                initVisualization(sandboxCount);
+                document.getElementById('sandboxVisualization').classList.remove('hidden');
+            }
+
             // Find the node
             const node = sandboxNodes.find(n => n.id === sandboxId);
-            if (!node) return;
-            
+            if (!node) {
+                console.warn(`No node found for sandbox ID ${sandboxId}`);
+                return;
+            }
+
             // Update node data
             node.status = status;
             node.progress = progress;
-            
+
             // Update node appearance
             updateNodeAppearance(sandboxId);
-            
+
             // Update progress arcs
             updateProgressArcs();
-            
+
             // Update tooltip
             d3.select(`.node-${sandboxId} title`)
                 .text(`Sandbox #${sandboxId+1}\nStatus: ${status}\nProgress: ${progress}%`);
         }
-        
+
         // Update the appearance of a node based on its status
         function updateNodeAppearance(sandboxId) {
             const node = sandboxNodes.find(n => n.id === sandboxId);
             if (!node) return;
-            
+
             // Select the node circle
             const circle = d3.select(`.node-circle-${sandboxId}`);
-            
+
             // Define colors based on status
             let fillColor = "#e5e7eb"; // default gray
             let strokeColor = "#6366f1"; // default indigo
-            
+
             switch (node.status) {
                 case 'pending':
                     fillColor = "#e5e7eb"; // gray
@@ -424,13 +439,13 @@
                     strokeColor = "#ef4444"; // red
                     break;
             }
-            
+
             // Update colors with transition
             circle.transition()
                 .duration(300)
                 .attr("fill", fillColor)
                 .attr("stroke", strokeColor);
-                
+
             // Add pulse effect on status change
             circle.transition()
                 .duration(300)
@@ -439,7 +454,7 @@
                 .duration(300)
                 .attr("r", 25);
         }
-        
+
         // Update progress arcs for all nodes
         function updateProgressArcs() {
             sandboxNodes.forEach(node => {
@@ -449,21 +464,21 @@
                         .outerRadius(27)
                         .startAngle(0)
                         .endAngle(node.progress * Math.PI * 2 / 100);
-                        
+
                     d3.select(`.progress-arc-${node.id}`)
                         .attr("d", arcGenerator());
                 }
             });
         }
-        
+
         // Check if in test mode by looking for the URL parameter
         if (window.location.href.includes('/test')) {
             document.getElementById('testModeBanner').classList.remove('hidden');
         }
-        
+
         document.getElementById('codeForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+
             const userInput = document.getElementById('user_input').value;
             const sandboxCount = parseInt(document.getElementById('sandbox_count').value);
             const submitButton = document.getElementById('submitButton');
@@ -473,23 +488,27 @@
             const errorMessage = document.getElementById('errorMessage');
             const evaluationResult = document.getElementById('evaluationResult');
             const implementationsContainer = document.getElementById('implementationsContainer');
-            
+
             // Reset visualization
             sandboxNodes = [];
             currentSessionId = null;
-            
-            // Show loading indicator and disable submit button
+
+            // Initialize visualization immediately with the current sandbox count
+            initVisualization(sandboxCount);
+
+            // Show visualization and loading indicator
+            document.getElementById('sandboxVisualization').classList.remove('hidden');
             loadingIndicator.classList.remove('hidden');
             resultsContainer.classList.add('hidden');
             errorContainer.classList.add('hidden');
             submitButton.disabled = true;
             submitButton.classList.add('opacity-50');
-            
+
             try {
                 // Get the form action (which might be /test in test mode)
                 const formAction = this.getAttribute('action') || '/execute';
                 console.log('Using endpoint:', formAction);
-                
+
                 const response = await fetch(formAction, {
                     method: 'POST',
                     headers: {
@@ -500,9 +519,9 @@
                         sandbox_count: document.getElementById('sandbox_count').value
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.error) {
                     // Show error message
                     errorMessage.textContent = data.error;
@@ -512,18 +531,18 @@
                     submitButton.classList.remove('opacity-50');
                     return;
                 }
-                
+
                 // Display evaluation result
-                const evaluationText = data.evaluation && data.evaluation.evaluation 
-                    ? data.evaluation.evaluation 
+                const evaluationText = data.evaluation && data.evaluation.evaluation
+                    ? data.evaluation.evaluation
                     : 'No evaluation available';
-                    
+
                 evaluationResult.textContent = evaluationText;
-                
+
                 // Show best implementation output preview if available
                 const bestOutputPreview = document.getElementById('bestOutputPreview');
                 const bestOutputContent = document.getElementById('bestOutputContent');
-                
+
                 if (data.evaluation && data.evaluation.best_implementation) {
                     const bestOutput = data.evaluation.best_implementation.execution_output;
                     if (bestOutput && bestOutput.trim()) {
@@ -535,7 +554,7 @@
                 } else {
                     bestOutputPreview.style.display = 'none';
                 }
-                
+
                 // Calculate and display performance metrics
                 if (data.results && data.results.length > 0 && data.timing_data) {
                     // Format time function (ms for < 1s, s for >= 1s)
@@ -546,71 +565,71 @@
                             return seconds.toFixed(2) + 's';
                         }
                     };
-                    
+
                     // Display total execution time
-                    document.getElementById('totalExecutionTime').textContent = 
+                    document.getElementById('totalExecutionTime').textContent =
                         formatTime(data.timing_data.total_execution_time || 0);
-                    
+
                     // Calculate average sandbox creation time
                     const creationTimes = data.results.map(r => r.sandbox_creation_time || 0);
                     const avgCreationTime = creationTimes.reduce((a, b) => a + b, 0) / creationTimes.length;
                     document.getElementById('avgSandboxCreation').textContent = formatTime(avgCreationTime);
-                    
+
                     // Calculate average GROQ API time
                     const groqTimes = data.results.map(r => r.groq_time || 0);
                     const avgGroqTime = groqTimes.reduce((a, b) => a + b, 0) / groqTimes.length;
                     document.getElementById('avgGroqTime').textContent = formatTime(avgGroqTime);
-                    
+
                     // Display sandbox count
                     document.getElementById('sandboxCount').textContent = data.results.length;
                 }
-                
+
                 // Clear previous implementations
                 implementationsContainer.innerHTML = '';
-                
+
                 // Add implementation results
                 if (Array.isArray(data.results)) {
                     data.results.forEach((result, index) => {
                         const implementationDiv = document.createElement('div');
                         implementationDiv.className = 'border rounded-md overflow-hidden';
-                        
+
                         const header = document.createElement('div');
                         // Highlight the best implementation if it matches the evaluation result
-                        const isBestImpl = data.evaluation && 
+                        const isBestImpl = data.evaluation &&
                             data.evaluation.best_implementation_index === (index + 1);
-                        
-                        header.className = isBestImpl 
-                            ? 'bg-green-200 px-4 py-2 font-semibold flex items-center justify-between' 
+
+                        header.className = isBestImpl
+                            ? 'bg-green-200 px-4 py-2 font-semibold flex items-center justify-between'
                             : 'bg-gray-200 px-4 py-2 font-semibold flex items-center justify-between';
-                        
+
                         const titleSpan = document.createElement('span');
                         titleSpan.textContent = `Implementation ${index + 1}`;
                         header.appendChild(titleSpan);
-                        
+
                         if (isBestImpl) {
                             const badgeSpan = document.createElement('span');
                             badgeSpan.className = 'bg-green-600 text-white text-xs px-2 py-1 rounded-full';
                             badgeSpan.textContent = 'Best Solution';
                             header.appendChild(badgeSpan);
                         }
-                        
+
                         implementationDiv.appendChild(header);
-                        
+
                         const content = document.createElement('div');
                         content.className = 'p-4 space-y-2';
-                        
+
                         // Performance metrics section
                         const metricsSection = document.createElement('div');
                         metricsSection.className = 'bg-blue-50 p-3 rounded text-sm mb-3';
-                        
+
                         const metricsLabel = document.createElement('h4');
                         metricsLabel.className = 'font-medium text-sm mb-1';
                         metricsLabel.textContent = 'Performance Metrics:';
                         metricsSection.appendChild(metricsLabel);
-                        
+
                         const metricsGrid = document.createElement('div');
                         metricsGrid.className = 'grid grid-cols-2 gap-x-2 gap-y-1 text-xs';
-                        
+
                         // Add metrics in grid format
                         // Function to format time (ms for < 1s, s for >= 1s)
                         const formatTimeValue = (seconds) => {
@@ -620,29 +639,29 @@
                                 return seconds.toFixed(2) + 's';
                             }
                         };
-                        
+
                         const metrics = [
                             {label: 'Sandbox Creation:', value: formatTimeValue(result.sandbox_creation_time || 0)},
                             {label: 'Code Generation (GROQ):', value: formatTimeValue(result.groq_time || 0)},
                             {label: 'Total Generation Time:', value: formatTimeValue(result.code_generation_time || 0)},
                             {label: 'Total Sandbox Time:', value: formatTimeValue(result.total_sandbox_time || 0)}
                         ];
-                        
+
                         metrics.forEach(metric => {
                             const labelDiv = document.createElement('div');
                             labelDiv.className = 'text-gray-600';
                             labelDiv.textContent = metric.label;
-                            
+
                             const valueDiv = document.createElement('div');
                             valueDiv.textContent = metric.value;
-                            
+
                             metricsGrid.appendChild(labelDiv);
                             metricsGrid.appendChild(valueDiv);
                         });
-                        
+
                         metricsSection.appendChild(metricsGrid);
                         content.appendChild(metricsSection);
-                        
+
                         // Error message if there is one
                         if (result.error) {
                             const errorDiv = document.createElement('div');
@@ -650,16 +669,16 @@
                             errorDiv.textContent = `Error: ${result.error}`;
                             content.appendChild(errorDiv);
                         }
-                        
+
                         // Code section
                         const codeSection = document.createElement('div');
                         codeSection.className = 'space-y-1';
-                        
+
                         const codeLabel = document.createElement('h4');
                         codeLabel.className = 'font-medium text-sm';
                         codeLabel.textContent = 'Generated Code:';
                         codeSection.appendChild(codeLabel);
-                        
+
                         // Strip markdown code blocks for display
                         let cleanCode = result.generated_code || 'No code available';
                         if (cleanCode.startsWith('```python') || cleanCode.startsWith('```')) {
@@ -673,28 +692,28 @@
                                 cleanCode = cleanCode.replace(/```python/g, '').replace(/```/g, '').trim();
                             }
                         }
-                        
+
                         const codeContent = document.createElement('pre');
                         codeContent.className = 'bg-gray-50 p-3 rounded text-sm overflow-x-auto';
                         codeContent.textContent = cleanCode;
                         codeSection.appendChild(codeContent);
-                        
+
                         content.appendChild(codeSection);
-                        
+
                         // Output section
                         const outputSection = document.createElement('div');
                         outputSection.className = 'space-y-1';
-                        
+
                         const outputLabel = document.createElement('h4');
                         outputLabel.className = 'font-medium text-sm';
                         outputLabel.textContent = 'Execution Output:';
                         outputSection.appendChild(outputLabel);
-                        
+
                         const outputContent = document.createElement('pre');
                         outputContent.className = 'bg-gray-50 p-3 rounded text-sm overflow-x-auto';
                         outputContent.textContent = result.execution_output || 'No output available';
                         outputSection.appendChild(outputContent);
-                        
+
                         // Add execution status
                         const statusDiv = document.createElement('div');
                         statusDiv.className = 'mt-2 text-sm';
@@ -706,10 +725,10 @@
                             statusDiv.textContent = `Status: ${result.execution_result}`;
                         }
                         outputSection.appendChild(statusDiv);
-                        
+
                         content.appendChild(outputSection);
                         implementationDiv.appendChild(content);
-                        
+
                         implementationsContainer.appendChild(implementationDiv);
                     });
                 } else {
@@ -719,11 +738,11 @@
                     noResults.textContent = 'No implementation results were returned.';
                     implementationsContainer.appendChild(noResults);
                 }
-                
+
                 // Show results
                 loadingIndicator.classList.add('hidden');
                 resultsContainer.classList.remove('hidden');
-                
+
             } catch (error) {
                 console.error('Error:', error);
                 errorMessage.textContent = `An error occurred while processing your request: ${error.message}`;
@@ -735,14 +754,44 @@
                 submitButton.classList.remove('opacity-50');
             }
         });
-        
+
         // Check if we're in test mode by looking at the form action
         document.addEventListener('DOMContentLoaded', function() {
             const formAction = document.getElementById('codeForm').getAttribute('action');
             if (formAction === '/test') {
                 document.getElementById('testModeBanner').classList.remove('hidden');
             }
+
+            // Pre-initialize visualization on page load with default sandbox count
+            const defaultSandboxCount = parseInt(document.getElementById('sandbox_count').value) || 3;
+            console.log("Pre-initializing visualization with", defaultSandboxCount, "sandboxes");
+            initVisualization(defaultSandboxCount);
         });
     </script>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8 mt-12">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <p class="text-sm text-gray-400">Powered by Daytona AI Sandboxes</p>
+                </div>
+                <div class="flex space-x-6">
+                    <a href="https://github.com/daytonaio" class="text-gray-300 hover:text-white" target="_blank">GitHub</a>
+                    <a href="https://www.daytona.io/" class="text-gray-300 hover:text-white" target="_blank">Daytona.io</a>
+                    <a href="https://daytona.io/docs" class="text-gray-300 hover:text-white" target="_blank">Documentation</a>
+                </div>
+            </div>
+
+            <!-- Waitlist CTA -->
+            <div class="mt-8 bg-indigo-700 rounded-lg p-6 text-center">
+                <h3 class="text-xl font-bold mb-2">Ready to run AI code in Daytona?</h3>
+                <p class="mb-4">Join the waitlist to get early access to Daytona's API key and sandbox capabilities</p>
+                <a href="https://www.daytona.io/waitlist" target="_blank" class="inline-block bg-white text-indigo-700 font-bold py-2 px-6 rounded-md hover:bg-gray-100 transition">
+                    Join the Waitlist
+                </a>
+            </div>
+        </div>
+    </footer>
 </body>
 </html>

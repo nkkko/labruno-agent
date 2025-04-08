@@ -3,9 +3,8 @@ import json
 import sys
 from groq import Groq
 
-# Pre-set API key
-os.environ["GROQ_API_KEY"] = "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"
-print("DEBUG[sandbox]: Hard-coded GROQ_API_KEY is present:", bool(os.environ.get("GROQ_API_KEY")))
+# Get API key from environment (will be set by process.exec)
+print("DEBUG[sandbox]: GROQ_API_KEY environment variable is present:", bool(os.environ.get("GROQ_API_KEY")))
 
 def generate_code(user_input):
     """Generate Python code based on user input using Groq API and LLaMA 4"""
