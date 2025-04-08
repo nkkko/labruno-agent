@@ -28,10 +28,26 @@
         
         <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
             <form id="codeForm" class="space-y-4" action="/execute">
-                <div>
-                    <label for="user_input" class="block text-sm font-medium text-gray-700 mb-1">
+                <div class="flex flex-wrap items-center justify-between mb-1">
+                    <label for="user_input" class="text-sm font-medium text-gray-700">
                         Describe what Python code you want to generate:
                     </label>
+                    <div class="flex items-center">
+                        <label for="sandbox_count" class="text-sm font-medium text-gray-700 mr-2">
+                            Sandboxes:
+                        </label>
+                        <input 
+                            type="number" 
+                            id="sandbox_count" 
+                            name="sandbox_count" 
+                            min="1" 
+                            max="10" 
+                            value="3" 
+                            class="w-16 px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                    </div>
+                </div>
+                <div>
                     <textarea 
                         id="user_input" 
                         name="user_input" 
@@ -142,7 +158,8 @@
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
                     body: new URLSearchParams({
-                        user_input: userInput
+                        user_input: userInput,
+                        sandbox_count: document.getElementById('sandbox_count').value
                     })
                 });
                 

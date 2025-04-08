@@ -601,12 +601,21 @@ def index():
 def execute():
     start_time = time.time()
     user_input = request.form.get('user_input')
+    sandbox_count = request.form.get('sandbox_count', '3')
     results = []
     evaluation = {"error": "Not started"}
     timing_data = {}
     
+    # Validate input and sandbox count
     if not user_input:
         return jsonify({"error": "No input provided"}), 400
+        
+    try:
+        sandbox_count = int(sandbox_count)
+        if sandbox_count < 1 or sandbox_count > 10:
+            sandbox_count = 3  # Default to 3 if out of range
+    except ValueError:
+        sandbox_count = 3  # Default to 3 if not a valid number
     
     try:
         print(f"DEBUG: Starting execution with input: {user_input}")
@@ -649,8 +658,8 @@ def execute():
             print(f"DEBUG: Error uploading task runner code: {str(e)}")
             raise
         
-        # Create 5 sandboxes in parallel using ThreadPoolExecutor
-        print("DEBUG: Creating 5 sandboxes concurrently...")
+        # Create sandboxes in parallel using ThreadPoolExecutor
+        print(f"DEBUG: Creating {sandbox_count} sandboxes concurrently...")
         sandboxes = []
         
         # Read the modified task runner with embedded API key
@@ -677,13 +686,13 @@ def execute():
         # Store sandbox creation start time
         sandbox_start_times = {}
         
-        # Create 5 sandboxes concurrently
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            # Submit 5 sandbox creation tasks
-            future_to_sandbox = {executor.submit(create_and_prepare_sandbox): i for i in range(5)}
+        # Create sandboxes concurrently
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            # Submit sandbox creation tasks
+            future_to_sandbox = {executor.submit(create_and_prepare_sandbox): i for i in range(sandbox_count)}
             
             # Track start time for each sandbox
-            for i in range(5):
+            for i in range(sandbox_count):
                 sandbox_start_times[i] = time.time()
             
             # Collect results as they complete
@@ -745,7 +754,7 @@ def execute():
                 }
         
         # Process all sandboxes concurrently
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=10) as executor:
             # Submit sandbox processing tasks
             sandbox_with_ids = [(sandbox, i) for i, sandbox in enumerate(sandboxes)]
             results = list(executor.map(process_sandbox, sandbox_with_ids))
@@ -778,7 +787,7 @@ def execute():
                 return False
         
         # Clean up all sandboxes concurrently
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=10) as executor:
             sandbox_with_ids = [(sandbox, i) for i, sandbox in enumerate(sandboxes)]
             list(executor.map(remove_sandbox, sandbox_with_ids))
         
@@ -816,14 +825,23 @@ def execute():
 def test_mode():
     """A test endpoint that doesn't actually use Daytona or Groq APIs"""
     user_input = request.form.get('user_input')
+    sandbox_count = request.form.get('sandbox_count', '3')
+    
     if not user_input:
         return jsonify({"error": "No input provided"}), 400
     
-    print(f"DEBUG: Test mode activated with input: {user_input}")
+    try:
+        sandbox_count = int(sandbox_count)
+        if sandbox_count < 1 or sandbox_count > 10:
+            sandbox_count = 3  # Default to 3 if out of range
+    except ValueError:
+        sandbox_count = 3  # Default to 3 if not a valid number
+    
+    print(f"DEBUG: Test mode activated with input: {user_input}, sandbox count: {sandbox_count}")
     
     # Create dummy results
     results = []
-    for i in range(5):
+    for i in range(sandbox_count):
         gen_code = f"""# Test implementation {i+1} for: {user_input}
 
 def solution():
