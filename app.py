@@ -5,7 +5,7 @@ import tempfile
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 from daytona_sdk import Daytona, DaytonaConfig, CreateSandboxParams
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Load environment variables
 load_dotenv(verbose=True, override=True)  # Added verbose and override to ensure environment variables are loaded
@@ -127,6 +127,41 @@ print(f"DEBUG[sandbox]: GROQ_API_KEY set directly: {os.environ.get('GROQ_API_KEY
             print(f"DEBUG: Error uploading code: {str(e)}")
     
     return sandbox
+
+def prepare_sandbox(sandbox, task_runner_code):
+    """Prepare a sandbox with task runner code and environment variables"""
+    try:
+        # Create directory structure
+        sandbox.fs.create_folder("/home/daytona/labruno", "755")
+        
+        # Upload the task runner file
+        file_path = "/home/daytona/labruno/sandbox_task_runner.py"
+        sandbox.fs.upload_file(file_path, task_runner_code.encode('utf-8'))
+        
+        # Make it executable
+        sandbox.fs.set_file_permissions(file_path, mode="755")
+        
+        # Also upload the .env file as a backup
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        env_file_content = f'''
+# Environment variables for sandbox
+GROQ_API_KEY={groq_api_key}
+'''
+        sandbox.fs.upload_file("/home/daytona/.env", env_file_content.encode('utf-8'))
+        
+        # Run code to set the environment variable directly
+        env_setup_code = '''
+import os
+
+os.environ["GROQ_API_KEY"] = "{}".format(open('/home/daytona/.env').read().split('=')[1].strip())
+print(f"DEBUG[sandbox]: GROQ_API_KEY set directly: {os.environ.get('GROQ_API_KEY')[:5]}...")
+'''
+        sandbox.process.code_run(env_setup_code)
+        
+        return sandbox
+    except Exception as e:
+        print(f"DEBUG: Error preparing sandbox: {str(e)}")
+        return sandbox  # Return sandbox even if preparation fails
 
 def generate_and_execute_code(sandbox, user_input, task_runner_path=None):
     """Generate and execute code in a sandbox based on user input"""
@@ -335,6 +370,16 @@ result = run_code_generation_and_execution()
                         parsed_result = json.loads(line)
                         if isinstance(parsed_result, dict) and 'generated_code' in parsed_result:
                             print(f"DEBUG: Found valid JSON result")
+                            
+                            # Check for empty execution output
+                            if not parsed_result.get('execution_output'):
+                                print("DEBUG: Empty execution output detected, looking for output in logs...")
+                                # Try to find output in the logs using regex
+                                direct_output = re.search(r"Direct execution output: '([^']*)'", result_text)
+                                if direct_output:
+                                    parsed_result['execution_output'] = direct_output.group(1)
+                                    print(f"DEBUG: Found direct execution output: {parsed_result['execution_output']}")
+                            
                             return parsed_result
                         matches.append(line)
                     except:
@@ -353,6 +398,25 @@ result = run_code_generation_and_execution()
                             parsed_result['execution_output'] = "Output not available"
                         if 'execution_result' not in parsed_result:
                             parsed_result['execution_result'] = "Unknown"
+                            
+                        # Check for empty execution output
+                        if not parsed_result.get('execution_output'):
+                            print("DEBUG: Empty execution output detected, looking for output in logs...")
+                            # Try to find output in the logs using regex
+                            direct_output = re.search(r"Direct execution output: '([^']*)'", result_text)
+                            if direct_output:
+                                parsed_result['execution_output'] = direct_output.group(1)
+                                print(f"DEBUG: Found direct execution output: {parsed_result['execution_output']}")
+                            else:
+                                # Look for any print output in the logs
+                                print_lines = []
+                                for line in result_text.splitlines():
+                                    if "DEBUG[sandbox]" not in line and "print(" not in line:
+                                        print_lines.append(line)
+                                if print_lines:
+                                    parsed_result['execution_output'] = "\n".join(print_lines)
+                                    print(f"DEBUG: Constructed output from logs: {parsed_result['execution_output']}")
+                        
                         return parsed_result
                 except:
                     pass
@@ -371,6 +435,25 @@ result = run_code_generation_and_execution()
                             parsed_result['execution_output'] = "Output not available"
                         if 'execution_result' not in parsed_result:
                             parsed_result['execution_result'] = "Unknown"
+                        
+                        # Check for empty execution output
+                        if not parsed_result.get('execution_output'):
+                            print("DEBUG: Empty execution output detected, looking for output in logs...")
+                            # Try to find output in the logs using regex
+                            direct_output = re.search(r"Direct execution output: '([^']*)'", result_text)
+                            if direct_output:
+                                parsed_result['execution_output'] = direct_output.group(1)
+                                print(f"DEBUG: Found direct execution output: {parsed_result['execution_output']}")
+                            else:
+                                # Look for any print output in the logs
+                                print_lines = []
+                                for line in result_text.splitlines():
+                                    if "DEBUG[sandbox]" not in line and "print(" not in line:
+                                        print_lines.append(line)
+                                if print_lines:
+                                    parsed_result['execution_output'] = "\n".join(print_lines)
+                                    print(f"DEBUG: Constructed output from logs: {parsed_result['execution_output']}")
+                                    
                         return parsed_result
                 except:
                     pass
@@ -382,10 +465,25 @@ result = run_code_generation_and_execution()
             code_match = re.search(code_pattern, result_text, re.DOTALL)
             generated_code = code_match.group(1) if code_match else result_text
             
+            # Look for direct execution output
+            execution_output = ""
+            direct_output = re.search(r"Direct execution output: '([^']*)'", result_text)
+            if direct_output:
+                execution_output = direct_output.group(1)
+                print(f"DEBUG: Found direct execution output: {execution_output}")
+            else:
+                # Extract non-debug lines as potential output
+                output_lines = []
+                for line in result_text.splitlines():
+                    if "DEBUG[sandbox]" not in line and "print(" not in line:
+                        output_lines.append(line)
+                if output_lines:
+                    execution_output = "\n".join(output_lines)
+                    
             # Create a fallback result
             return {
                 "generated_code": generated_code,
-                "execution_output": result_text,
+                "execution_output": execution_output or result_text,
                 "execution_result": "Success" if "error" not in result_text.lower() else "Error"
             }
         except Exception as e:
@@ -464,7 +562,9 @@ def evaluate_results(main_sandbox, results):
         output_snippet = best_impl.get('execution_output', '')[:100] + '...' if len(best_impl.get('execution_output', '')) > 100 else best_impl.get('execution_output', '')
         
         evaluation = {
-            "evaluation": f"After analyzing the available implementations, I've determined that implementation {best_impl_index + 1} is the best solution. It executes successfully and produces the expected output. The code is concise and follows good programming practices. Output: {output_snippet}"
+            "evaluation": f"After analyzing the available implementations, I've determined that implementation {best_impl_index + 1} is the best solution. It executes successfully and produces the expected output. The code is concise and follows good programming practices. Output: {output_snippet}",
+            "best_implementation_index": best_impl_index + 1,
+            "best_implementation": best_impl
         }
     else:
         evaluation = {
@@ -528,71 +628,64 @@ def execute():
             print(f"DEBUG: Error uploading task runner code: {str(e)}")
             raise
         
-        # Create 5 sandboxes in parallel
-        print("DEBUG: Creating 5 sandboxes in parallel...")
+        # Create 5 sandboxes in parallel using ThreadPoolExecutor
+        print("DEBUG: Creating 5 sandboxes concurrently...")
         sandboxes = []
-        for i in range(5):
+        
+        # Read the modified task runner with embedded API key
+        modified_runner_path = os.path.join(tempfile.gettempdir(), 'modified_task_runner.py')
+        with open(modified_runner_path, 'r') as f:
+            task_runner_code = f.read()
+        
+        # Function to create and prepare a sandbox concurrently
+        def create_and_prepare_sandbox():
             try:
                 sandbox = create_sandbox()
-                
-                # Upload task runner to each worker sandbox
-                try:
-                    # Read the modified task runner with embedded API key
-                    modified_runner_path = os.path.join(tempfile.gettempdir(), 'modified_task_runner.py')
-                    with open(modified_runner_path, 'r') as f:
-                        task_runner_code = f.read()
-                    
-                    # Create directory structure
-                    sandbox.fs.create_folder("/home/daytona/labruno", "755")
-                    
-                    # Upload the task runner file
-                    file_path = "/home/daytona/labruno/sandbox_task_runner.py"
-                    sandbox.fs.upload_file(file_path, task_runner_code.encode('utf-8'))
-                    
-                    # Make it executable
-                    sandbox.fs.set_file_permissions(file_path, mode="755")
-                    
-                    # Also upload the .env file as a backup
-                    env_file_content = f'''
-# Environment variables for sandbox
-GROQ_API_KEY={groq_api_key}
-'''
-                    sandbox.fs.upload_file("/home/daytona/.env", env_file_content.encode('utf-8'))
-                    
-                    # Run code to set the environment variable directly
-                    env_setup_code = '''
-import os
-
-os.environ["GROQ_API_KEY"] = "{}".format(open('/home/daytona/.env').read().split('=')[1].strip())
-print(f"DEBUG[sandbox]: GROQ_API_KEY set directly: {os.environ.get('GROQ_API_KEY')[:5]}...")
-'''
-                    sandbox.process.code_run(env_setup_code)
-                    
-                    print(f"DEBUG: Uploaded task runner to sandbox {i+1}")
-                except Exception as e:
-                    print(f"DEBUG: Error uploading task runner to sandbox {i+1}: {str(e)}")
-                
-                print(f"DEBUG: Created sandbox {i+1}: {sandbox}")
-                sandboxes.append(sandbox)
+                return prepare_sandbox(sandbox, task_runner_code)
             except Exception as e:
-                print(f"DEBUG: Error creating sandbox {i+1}: {str(e)}")
+                print(f"DEBUG: Error creating and preparing sandbox: {str(e)}")
+                return None
         
-        print(f"DEBUG: Created {len(sandboxes)} sandboxes")
+        # Create 5 sandboxes concurrently
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # Submit 5 sandbox creation tasks
+            future_to_sandbox = {executor.submit(create_and_prepare_sandbox): i for i in range(5)}
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_sandbox):
+                sandbox_id = future_to_sandbox[future]
+                try:
+                    sandbox = future.result()
+                    if sandbox:
+                        print(f"DEBUG: Created and prepared sandbox {sandbox_id+1}: {sandbox}")
+                        sandboxes.append(sandbox)
+                except Exception as e:
+                    print(f"DEBUG: Error with sandbox {sandbox_id+1}: {str(e)}")
+        
+        print(f"DEBUG: Successfully created {len(sandboxes)} sandboxes concurrently")
         
         # Run code generation and execution in parallel
-        print("DEBUG: Running code generation and execution...")
-        results = []
-        for i, sandbox in enumerate(sandboxes):
-            try:
-                print(f"DEBUG: Processing sandbox {i+1}...")
-                result = generate_and_execute_code(sandbox, user_input, task_runner_path)
-                print(f"DEBUG: Result from sandbox {i+1}: {result}")
-                results.append(result)
-            except Exception as e:
-                print(f"DEBUG: Error processing sandbox {i+1}: {str(e)}")
-                results.append({"error": str(e), "generated_code": "Error", "execution_output": str(e)})
+        print("DEBUG: Running code generation and execution concurrently...")
         
-        print(f"DEBUG: Collected {len(results)} results")
+        # Function to process a sandbox concurrently
+        def process_sandbox(sandbox_with_id):
+            sandbox, sandbox_id = sandbox_with_id
+            try:
+                print(f"DEBUG: Processing sandbox {sandbox_id+1}...")
+                result = generate_and_execute_code(sandbox, user_input, task_runner_path)
+                print(f"DEBUG: Result from sandbox {sandbox_id+1}: {result}")
+                return result
+            except Exception as e:
+                print(f"DEBUG: Error processing sandbox {sandbox_id+1}: {str(e)}")
+                return {"error": str(e), "generated_code": "Error", "execution_output": str(e)}
+        
+        # Process all sandboxes concurrently
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # Submit sandbox processing tasks
+            sandbox_with_ids = [(sandbox, i) for i, sandbox in enumerate(sandboxes)]
+            results = list(executor.map(process_sandbox, sandbox_with_ids))
+        
+        print(f"DEBUG: Collected {len(results)} results concurrently")
         
         # Evaluate results
         if results:
@@ -606,14 +699,23 @@ print(f"DEBUG[sandbox]: GROQ_API_KEY set directly: {os.environ.get('GROQ_API_KEY
         else:
             evaluation = {"error": "No results to evaluate", "evaluation": "No results were generated to evaluate"}
         
-        # Clean up sandboxes
-        print("DEBUG: Cleaning up sandboxes...")
-        for i, sandbox in enumerate(sandboxes):
+        # Clean up sandboxes concurrently
+        print("DEBUG: Cleaning up sandboxes concurrently...")
+        
+        def remove_sandbox(sandbox_with_id):
+            sandbox, sandbox_id = sandbox_with_id
             try:
-                print(f"DEBUG: Removing sandbox {i+1}...")
+                print(f"DEBUG: Removing sandbox {sandbox_id+1}...")
                 daytona.remove(sandbox)
+                return True
             except Exception as e:
-                print(f"DEBUG: Error removing sandbox {i+1}: {str(e)}")
+                print(f"DEBUG: Error removing sandbox {sandbox_id+1}: {str(e)}")
+                return False
+        
+        # Clean up all sandboxes concurrently
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            sandbox_with_ids = [(sandbox, i) for i, sandbox in enumerate(sandboxes)]
+            list(executor.map(remove_sandbox, sandbox_with_ids))
         
         # Clean up main sandbox
         try:

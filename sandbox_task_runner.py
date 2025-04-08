@@ -3,19 +3,9 @@ import json
 import sys
 from groq import Groq
 
-def strip_markdown(code_text):
-    """Remove markdown code block syntax from the generated code"""
-    if code_text.startswith("```python"):
-        # Find the end of the opening code block
-        start_idx = code_text.find("\n") + 1
-        # Find the closing code block
-        end_idx = code_text.rfind("```")
-        if end_idx > start_idx:
-            return code_text[start_idx:end_idx].strip()
-    
-    # If no markdown formatting is detected or it's not formatted as expected
-    # just return the original code but strip any triple backticks
-    return code_text.replace("```", "").strip()
+# Pre-set API key
+os.environ["GROQ_API_KEY"] = "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"
+print("DEBUG[sandbox]: Hard-coded GROQ_API_KEY is present:", bool(os.environ.get("GROQ_API_KEY")))
 
 def generate_code(user_input):
     """Generate Python code based on user input using Groq API and LLaMA 4"""
@@ -24,12 +14,12 @@ def generate_code(user_input):
     print(f"DEBUG[sandbox]: Using GROQ_API_KEY: {'Present' if groq_api_key else 'Missing'}")
     client = Groq(api_key=groq_api_key)
     
-    # Generate code using LLaMA 4 with strong instructions to avoid markdown
+    # Generate code using LLaMA 4
     chat_completion = client.chat.completions.create(
         messages=[
             {
                 "role": "system", 
-                "content": "You are a helpful AI assistant that generates Python code based on user requests. Generate ONLY the raw Python code without any explanations or markdown formatting. NEVER use ```python or any markdown formatting. Just output the plain Python code."
+                "content": "You are a helpful AI assistant that generates Python code based on user requests. Generate ONLY the Python code without any explanations or markdown formatting."
             },
             {
                 "role": "user",
@@ -39,11 +29,8 @@ def generate_code(user_input):
         model="meta-llama/llama-4-scout-17b-16e-instruct",
     )
     
-    # Extract the generated code and strip any markdown that might still be present
-    code = chat_completion.choices[0].message.content
-    cleaned_code = strip_markdown(code)
-    print(f"DEBUG[sandbox]: Generated code length: {len(cleaned_code)} characters")
-    return cleaned_code
+    # Extract the generated code
+    return chat_completion.choices[0].message.content
 
 def execute_code(code):
     """Execute the generated code and capture output"""
@@ -51,50 +38,48 @@ def execute_code(code):
     from io import StringIO
     import traceback
     
-    # Modify the code to ensure it produces output
-    # Check if it's a script with if __name__ == "__main__"
-    if 'if __name__ == "__main__":' in code and 'main()' in code:
-        # Add a call to main() at the end, regardless of the guard
-        modified_code = code + "\n\n# Ensure main is called\ntry:\n    main()\nexcept NameError:\n    pass"
-    else:
-        # Check if the last line is an expression that may return a value
-        lines = code.strip().split('\n')
-        last_line = lines[-1].strip()
-        
-        # If the last line might be a function or expression that returns a value but doesn't print
-        if (not last_line.startswith('print(') and 
-            not last_line.startswith('#') and 
-            not last_line.startswith('if ') and 
-            not last_line.endswith(':') and
-            not last_line == ''):
-            # Modify the code to print the result of the last line
-            lines[-1] = f"print('Result:', {last_line})"
-            modified_code = '\n'.join(lines)
+    # First, strip markdown code blocks if present
+    print(f"DEBUG[sandbox]: Original code length: {len(code)} chars")
+    if code.startswith('```python') or code.startswith('```'):
+        # Find the end of the opening code block
+        start_idx = code.find('\n') + 1
+        # Find the closing code block
+        end_idx = code.rfind('```')
+        if end_idx > start_idx:
+            code = code[start_idx:end_idx].strip()
         else:
-            modified_code = code
+            code = code.replace('```python', '').replace('```', '').strip()
     
-    print(f"DEBUG[sandbox]: Executing code (length: {len(modified_code)} chars)")
+    print(f"DEBUG[sandbox]: Code after markdown stripping: {len(code)} chars")
+    print(f"DEBUG[sandbox]: Code to execute: {code}")
     
-    output = StringIO()
-    original_stdout = sys.stdout
-    sys.stdout = output
+    # Create a temporary file to execute directly
+    import os
+    import tempfile
     
+    temp_fd, temp_path = tempfile.mkstemp(suffix='.py')
+    with os.fdopen(temp_fd, 'w') as f:
+        f.write(code)
+    
+    # Execute with subprocess to properly capture output
+    import subprocess
     try:
-        # Use a dedicated namespace to avoid conflicts
-        exec_namespace = {}
-        exec(modified_code, exec_namespace)
+        output = subprocess.check_output(["python3", temp_path], 
+                                      stderr=subprocess.STDOUT,
+                                      text=True)
+        execution_output = output.strip()
         execution_result = "Success"
-    except Exception as e:
-        error_msg = str(e)
-        trace = traceback.format_exc()
-        execution_result = f"Error: {error_msg}\n{trace}"
+        print(f"DEBUG[sandbox]: Direct execution output: '{execution_output}'")
+    except subprocess.CalledProcessError as e:
+        execution_output = e.output.strip()
+        execution_result = f"Error: {e.returncode}"
+        print(f"DEBUG[sandbox]: Direct execution error: '{execution_output}'")
     
-    sys.stdout = original_stdout
-    execution_output = output.getvalue()
-    
-    # If there's still no output but execution was successful, add an info message
-    if not execution_output.strip() and execution_result == "Success":
-        execution_output = "(Code executed successfully but produced no output)"
+    # Clean up temp file
+    try:
+        os.unlink(temp_path)
+    except:
+        pass
     
     return {
         "execution_output": execution_output,
@@ -162,6 +147,7 @@ print(f"Result: {{result}}")
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
+        print(f"DEBUG[sandbox]: Process task error: {str(e)}\n{error_trace}")
         error_result = {
             "generated_code": f"Error occurred during processing: {str(e)}",
             "execution_output": error_trace,

@@ -69,6 +69,11 @@
                 <div class="mb-6">
                     <h3 class="text-lg font-semibold mb-2">Best Implementation</h3>
                     <div id="evaluationResult" class="bg-gray-50 p-4 rounded-md text-sm"></div>
+                    
+                    <div id="bestOutputPreview" class="mt-4" style="display: none;">
+                        <h4 class="font-medium text-sm mb-2">Output Preview:</h4>
+                        <pre id="bestOutputContent" class="bg-gray-50 p-3 rounded text-sm overflow-x-auto border border-green-200"></pre>
+                    </div>
                 </div>
                 
                 <div class="space-y-6" id="implementationsContainer">
@@ -137,6 +142,22 @@
                     
                 evaluationResult.textContent = evaluationText;
                 
+                // Show best implementation output preview if available
+                const bestOutputPreview = document.getElementById('bestOutputPreview');
+                const bestOutputContent = document.getElementById('bestOutputContent');
+                
+                if (data.evaluation && data.evaluation.best_implementation) {
+                    const bestOutput = data.evaluation.best_implementation.execution_output;
+                    if (bestOutput && bestOutput.trim()) {
+                        bestOutputContent.textContent = bestOutput;
+                        bestOutputPreview.style.display = 'block';
+                    } else {
+                        bestOutputPreview.style.display = 'none';
+                    }
+                } else {
+                    bestOutputPreview.style.display = 'none';
+                }
+                
                 // Clear previous implementations
                 implementationsContainer.innerHTML = '';
                 
@@ -147,8 +168,25 @@
                         implementationDiv.className = 'border rounded-md overflow-hidden';
                         
                         const header = document.createElement('div');
-                        header.className = 'bg-gray-200 px-4 py-2 font-semibold';
-                        header.textContent = `Implementation ${index + 1}`;
+                        // Highlight the best implementation if it matches the evaluation result
+                        const isBestImpl = data.evaluation && 
+                            data.evaluation.best_implementation_index === (index + 1);
+                        
+                        header.className = isBestImpl 
+                            ? 'bg-green-200 px-4 py-2 font-semibold flex items-center justify-between' 
+                            : 'bg-gray-200 px-4 py-2 font-semibold flex items-center justify-between';
+                        
+                        const titleSpan = document.createElement('span');
+                        titleSpan.textContent = `Implementation ${index + 1}`;
+                        header.appendChild(titleSpan);
+                        
+                        if (isBestImpl) {
+                            const badgeSpan = document.createElement('span');
+                            badgeSpan.className = 'bg-green-600 text-white text-xs px-2 py-1 rounded-full';
+                            badgeSpan.textContent = 'Best Solution';
+                            header.appendChild(badgeSpan);
+                        }
+                        
                         implementationDiv.appendChild(header);
                         
                         const content = document.createElement('div');
@@ -171,9 +209,23 @@
                         codeLabel.textContent = 'Generated Code:';
                         codeSection.appendChild(codeLabel);
                         
+                        // Strip markdown code blocks for display
+                        let cleanCode = result.generated_code || 'No code available';
+                        if (cleanCode.startsWith('```python') || cleanCode.startsWith('```')) {
+                            // Find the end of the opening code block
+                            const startIdx = cleanCode.indexOf('\n') + 1;
+                            // Find the closing code block
+                            const endIdx = cleanCode.lastIndexOf('```');
+                            if (endIdx > startIdx) {
+                                cleanCode = cleanCode.substring(startIdx, endIdx).trim();
+                            } else {
+                                cleanCode = cleanCode.replace(/```python/g, '').replace(/```/g, '').trim();
+                            }
+                        }
+                        
                         const codeContent = document.createElement('pre');
                         codeContent.className = 'bg-gray-50 p-3 rounded text-sm overflow-x-auto';
-                        codeContent.textContent = result.generated_code || 'No code available';
+                        codeContent.textContent = cleanCode;
                         codeSection.appendChild(codeContent);
                         
                         content.appendChild(codeSection);
@@ -191,6 +243,18 @@
                         outputContent.className = 'bg-gray-50 p-3 rounded text-sm overflow-x-auto';
                         outputContent.textContent = result.execution_output || 'No output available';
                         outputSection.appendChild(outputContent);
+                        
+                        // Add execution status
+                        const statusDiv = document.createElement('div');
+                        statusDiv.className = 'mt-2 text-sm';
+                        if (result.execution_result === 'Success') {
+                            statusDiv.className += ' text-green-600';
+                            statusDiv.textContent = 'Status: Success';
+                        } else {
+                            statusDiv.className += ' text-red-600';
+                            statusDiv.textContent = `Status: ${result.execution_result}`;
+                        }
+                        outputSection.appendChild(statusDiv);
                         
                         content.appendChild(outputSection);
                         implementationDiv.appendChild(content);
