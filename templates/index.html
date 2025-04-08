@@ -43,7 +43,6 @@
                             id="sandbox_count"
                             name="sandbox_count"
                             min="1"
-                            max="10"
                             value="3"
                             class="w-16 px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                         />
@@ -95,7 +94,7 @@
                         <span>Preparing</span>
                     </div>
                     <div class="flex items-center">
-                        <div class="w-3 h-3 rounded-full bg-blue-200 border border-blue-600 mr-1"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-100 border border-green-500 mr-1"></div>
                         <span>Ready</span>
                     </div>
                     <div class="flex items-center">
@@ -107,14 +106,38 @@
                         <span>Executing</span>
                     </div>
                     <div class="flex items-center">
-                        <div class="w-3 h-3 rounded-full bg-green-100 border border-green-500 mr-1"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-500 border border-green-700 mr-1" id="complete-legend"></div>
                         <span>Complete</span>
                     </div>
                     <div class="flex items-center">
-                        <div class="w-3 h-3 rounded-full bg-red-100 border border-red-500 mr-1"></div>
+                        <div class="w-3 h-3 rounded-full bg-red-500 border border-red-700 mr-1" id="error-legend"></div>
                         <span>Error</span>
                     </div>
                 </div>
+                
+                <!-- Add styles to ensure consistent coloring -->
+                <style>
+                    /* Status-specific colors */
+                    .status-complete {
+                        fill: #10b981 !important;
+                        stroke: #047857 !important;
+                    }
+                    
+                    .status-error {
+                        fill: #ef4444 !important;
+                        stroke: #b91c1c !important;
+                    }
+                    
+                    #complete-legend {
+                        background-color: #10b981;
+                        border-color: #047857;
+                    }
+                    
+                    #error-legend {
+                        background-color: #ef4444;
+                        border-color: #b91c1c;
+                    }
+                </style>
             </div>
 
             <div id="errorContainer" class="hidden mt-6 p-4 bg-red-50 border-l-4 border-red-500">
@@ -123,43 +146,47 @@
             </div>
 
             <div id="results" class="hidden mt-6">
-                <h2 class="text-xl font-semibold mb-4">Results</h2>
-
-                <!-- Overall Performance Metrics -->
-                <div id="overallTimingInfo" class="mb-6 p-4 bg-blue-50 rounded-lg">
-                    <h3 class="text-lg font-semibold mb-2">Performance Summary</h3>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div class="bg-white p-3 rounded shadow-sm">
-                            <div class="text-sm text-gray-500">Total Time</div>
-                            <div id="totalExecutionTime" class="text-xl font-semibold">-</div>
-                        </div>
-                        <div class="bg-white p-3 rounded shadow-sm">
-                            <div class="text-sm text-gray-500">Avg Sandbox Creation</div>
-                            <div id="avgSandboxCreation" class="text-xl font-semibold">-</div>
-                        </div>
-                        <div class="bg-white p-3 rounded shadow-sm">
-                            <div class="text-sm text-gray-500">Avg Code Generation</div>
-                            <div id="avgGroqTime" class="text-xl font-semibold">-</div>
-                        </div>
-                        <div class="bg-white p-3 rounded shadow-sm">
-                            <div class="text-sm text-gray-500">Sandboxes Created</div>
-                            <div id="sandboxCount" class="text-xl font-semibold">-</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mb-6">
-                    <h3 class="text-lg font-semibold mb-2">Best Implementation</h3>
-                    <div id="evaluationResult" class="bg-gray-50 p-4 rounded-md text-sm"></div>
-
-                    <div id="bestOutputPreview" class="mt-4" style="display: none;">
-                        <h4 class="font-medium text-sm mb-2">Output Preview:</h4>
-                        <pre id="bestOutputContent" class="bg-gray-50 p-3 rounded text-sm overflow-x-auto border border-green-200"></pre>
-                    </div>
-                </div>
-
+                <!-- Implementation results -->
                 <div class="space-y-6" id="implementationsContainer">
                     <!-- Implementation results will be added here dynamically -->
+                </div>
+                
+                <!-- Overall Results (moved below implementations) -->
+                <div class="mt-10 mb-6 bg-white rounded-lg shadow-lg p-6 border border-gray-200">
+                    <h2 class="text-xl font-semibold mb-4">Result Summary</h2>
+                    
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold mb-2">Best Agent Solution</h3>
+                        <div id="evaluationResult" class="bg-gray-50 p-4 rounded-md text-sm"></div>
+    
+                        <div id="bestOutputPreview" class="mt-4" style="display: none;">
+                            <h4 class="font-medium text-sm mb-2">Output Preview:</h4>
+                            <pre id="bestOutputContent" class="bg-gray-50 p-3 rounded text-sm overflow-x-auto border border-green-200"></pre>
+                        </div>
+                    </div>
+                    
+                    <!-- Overall Performance Metrics -->
+                    <div id="overallTimingInfo" class="p-4 bg-blue-50 rounded-lg">
+                        <h3 class="text-lg font-semibold mb-2">Performance Summary</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-white p-3 rounded shadow-sm">
+                                <div class="text-sm text-gray-500">Total Time</div>
+                                <div id="totalExecutionTime" class="text-xl font-semibold">-</div>
+                            </div>
+                            <div class="bg-white p-3 rounded shadow-sm">
+                                <div class="text-sm text-gray-500">Avg Sandbox Creation</div>
+                                <div id="avgSandboxCreation" class="text-xl font-semibold">-</div>
+                            </div>
+                            <div class="bg-white p-3 rounded shadow-sm">
+                                <div class="text-sm text-gray-500">Avg Code Generation</div>
+                                <div id="avgGroqTime" class="text-xl font-semibold">-</div>
+                            </div>
+                            <div class="bg-white p-3 rounded shadow-sm">
+                                <div class="text-sm text-gray-500">Sandboxes Created</div>
+                                <div id="sandboxCount" class="text-xl font-semibold">-</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -198,11 +225,46 @@
                     document.getElementById('sandboxVisualization').classList.remove('hidden');
                 }
 
-                // Update visualization
+                // Extra debugging for completed and error states
+                if (data.status === 'complete' || data.status === 'error') {
+                    console.log(`⚠️ IMPORTANT: Sandbox ${data.sandbox_id} is now ${data.status.toUpperCase()} with progress ${data.progress}`);
+                }
+
+                // Update visualization and log status change
+                console.log(`Updating sandbox ${data.sandbox_id} to status: ${data.status} with progress: ${data.progress}`);
                 updateSandboxStatus(data.sandbox_id, data.status, data.progress);
             });
         }
 
+        // Helper function to get status colors
+        function getStatusFillColor(status) {
+            switch(status) {
+                case 'pending': return "#e5e7eb";
+                case 'creating': return "#dbeafe";
+                case 'preparing': return "#fef3c7";
+                case 'ready': return "#bbf7d0";
+                case 'generating': return "#f3e8ff";
+                case 'executing': return "#e0e7ff";
+                case 'complete': return "#10b981";
+                case 'error': return "#ef4444";
+                default: return "#e5e7eb";
+            }
+        }
+        
+        function getStatusStrokeColor(status) {
+            switch(status) {
+                case 'pending': return "#6b7280";
+                case 'creating': return "#3b82f6";
+                case 'preparing': return "#d97706";
+                case 'ready': return "#22c55e";
+                case 'generating': return "#a855f7";
+                case 'executing': return "#6366f1";
+                case 'complete': return "#047857";
+                case 'error': return "#b91c1c";
+                default: return "#6366f1";
+            }
+        }
+            
         // Initialize the visualization
         function initVisualization(sandboxCount) {
             console.log("Initializing visualization with", sandboxCount, "sandboxes");
@@ -288,8 +350,14 @@
             // Add circles for each node
             node.append("circle")
                 .attr("r", d => d.r || 25)
-                .attr("fill", d => d.id === 'center' ? "#4f46e5" : "#e5e7eb")
-                .attr("stroke", d => d.id === 'center' ? "#ffffff" : "#6366f1")
+                .attr("fill", d => {
+                    if (d.id === 'center') return "#4f46e5";
+                    return getStatusFillColor(d.status || 'pending');
+                })
+                .attr("stroke", d => {
+                    if (d.id === 'center') return "#ffffff";
+                    return getStatusStrokeColor(d.status || 'pending');
+                })
                 .attr("stroke-width", 2)
                 .attr("class", d => `node-circle node-circle-${d.id}`);
 
@@ -382,6 +450,47 @@
             node.status = status;
             node.progress = progress;
 
+            // Special handling for complete and error states
+            if (status === 'complete' || status === 'error') {
+                // Get the circle element
+                const circle = d3.select(`.node-circle-${sandboxId}`);
+                
+                // Add color-related CSS class for consistent styling
+                document.querySelectorAll(`.node-circle-${sandboxId}`).forEach(el => {
+                    // First, remove any existing status classes
+                    el.classList.remove('status-pending', 'status-creating', 'status-preparing', 
+                                       'status-ready', 'status-generating', 'status-executing',
+                                       'status-complete', 'status-error');
+                    
+                    // Add the appropriate class
+                    el.classList.add(`status-${status}`);
+                    
+                    // Directly apply color as inline style (highest priority)
+                    if (status === 'complete') {
+                        el.style.fill = "#10b981";
+                        el.style.stroke = "#047857";
+                        console.log(`🟢 Direct CSS green coloring for sandbox ${sandboxId} (complete)`);
+                    } else if (status === 'error') {
+                        el.style.fill = "#ef4444";
+                        el.style.stroke = "#b91c1c";
+                        console.log(`🔴 Direct CSS red coloring for sandbox ${sandboxId} (error)`);
+                    }
+                });
+                
+                // Backup D3 selection method
+                if (status === 'complete') {
+                    // Force green colors
+                    circle.style("fill", "#10b981")
+                          .style("stroke", "#047857");
+                    console.log(`🟢 D3 green coloring for sandbox ${sandboxId} (complete)`);
+                } else {
+                    // Force red colors
+                    circle.style("fill", "#ef4444")
+                          .style("stroke", "#b91c1c");
+                    console.log(`🔴 D3 red coloring for sandbox ${sandboxId} (error)`);
+                }
+            }
+
             // Update node appearance
             updateNodeAppearance(sandboxId);
 
@@ -398,47 +507,24 @@
             const node = sandboxNodes.find(n => n.id === sandboxId);
             if (!node) return;
 
+            console.log(`Updating appearance for sandbox ${sandboxId}, status: ${node.status}`);
+
             // Select the node circle
             const circle = d3.select(`.node-circle-${sandboxId}`);
-
-            // Define colors based on status
-            let fillColor = "#e5e7eb"; // default gray
-            let strokeColor = "#6366f1"; // default indigo
-
-            switch (node.status) {
-                case 'pending':
-                    fillColor = "#e5e7eb"; // gray
-                    strokeColor = "#6b7280"; // dark gray
-                    break;
-                case 'creating':
-                    fillColor = "#dbeafe"; // light blue
-                    strokeColor = "#3b82f6"; // blue
-                    break;
-                case 'preparing':
-                    fillColor = "#fef3c7"; // light amber
-                    strokeColor = "#d97706"; // amber
-                    break;
-                case 'ready':
-                    fillColor = "#bbf7d0"; // light blue
-                    strokeColor = "#4f46e5"; // indigo
-                    break;
-                case 'generating':
-                    fillColor = "#f3e8ff"; // light purple
-                    strokeColor = "#a855f7"; // purple
-                    break;
-                case 'executing':
-                    fillColor = "#e0e7ff"; // light indigo
-                    strokeColor = "#6366f1"; // indigo
-                    break;
-                case 'complete':
-                    fillColor = "#d1fae5"; // light emerald
-                    strokeColor = "#10b981"; // emerald
-                    break;
-                case 'error':
-                    fillColor = "#fee2e2"; // light red
-                    strokeColor = "#ef4444"; // red
-                    break;
+            if (!circle.node()) {
+                console.error(`Could not find circle element for sandbox ${sandboxId}`);
+                return;
             }
+
+            // Get the appropriate colors using our helper functions
+            const fillColor = getStatusFillColor(node.status);
+            const strokeColor = getStatusStrokeColor(node.status);
+            
+            if (node.status === 'complete' || node.status === 'error') {
+                console.log(`Setting ${node.status} colors for sandbox ${sandboxId}: fill=${fillColor}, stroke=${strokeColor}`);
+            }
+            
+            console.log(`Final colors for sandbox ${sandboxId}: fill=${fillColor}, stroke=${strokeColor}`);
 
             // Update colors with transition
             circle.transition()
@@ -453,6 +539,99 @@
                 .transition()
                 .duration(300)
                 .attr("r", 25);
+                
+            // Add continuous pulsing animation for complete and error states
+            if (node.status === 'complete' || node.status === 'error') {
+                console.log(`Setting up pulsing animation for ${node.status} sandbox ${sandboxId}`);
+                
+                // Debug the node and color values
+                console.log(`DEBUG - Node status: ${node.status}`);
+                console.log(`DEBUG - Expected fill color: ${getStatusFillColor(node.status)}`);
+                console.log(`DEBUG - Expected stroke color: ${getStatusStrokeColor(node.status)}`);
+                
+                // Create a hacky function to modify the SVG directly
+                window.d3NodeFixer = window.d3NodeFixer || {};
+                window.d3NodeFixer[sandboxId] = {
+                    status: node.status,
+                    selector: `.node-circle-${node.id}`
+                };
+                
+                // Ultra-aggressive approach:
+                // 1. Create an inline script that directly modifies the SVG element
+                const styleScript = document.createElement('script');
+                styleScript.textContent = `
+                    // This script directly modifies the SVG element
+                    (function() {
+                        const svgEl = document.querySelector('.node-circle-${node.id}');
+                        if (svgEl) {
+                            svgEl.setAttribute('style', 'fill: ${node.status === 'complete' ? '#10b981' : '#ef4444'} !important; stroke: ${node.status === 'complete' ? '#047857' : '#b91c1c'} !important;');
+                            svgEl.setAttribute('fill', '${node.status === 'complete' ? '#10b981' : '#ef4444'}');
+                            svgEl.setAttribute('stroke', '${node.status === 'complete' ? '#047857' : '#b91c1c'}');
+                            console.log('[Inline Script] Applied ${node.status} colors to .node-circle-${node.id}');
+                        } else {
+                            console.log('[Inline Script] Could not find .node-circle-${node.id}');
+                        }
+                    })();
+                `;
+                document.head.appendChild(styleScript);
+                
+                // Force the colors directly (bypassing any transition issues)
+                if (node.status === 'complete') {
+                    // Directly force green colors for completed nodes
+                    circle.style("fill", "#10b981")
+                          .style("stroke", "#047857")
+                          .attr("fill", "#10b981") 
+                          .attr("stroke", "#047857");
+                    
+                    console.log("DEBUG - Forcing GREEN colors for completed node");
+                } else if (node.status === 'error') {
+                    // Directly force red colors for error nodes
+                    circle.style("fill", "#ef4444")
+                          .style("stroke", "#b91c1c")
+                          .attr("fill", "#ef4444")
+                          .attr("stroke", "#b91c1c");
+                    
+                    console.log("DEBUG - Forcing RED colors for error node");
+                }
+                
+                // Also inject a style tag to force colors via CSS
+                const styleTag = document.createElement('style');
+                styleTag.textContent = `
+                    .node-circle-${node.id} {
+                        fill: ${node.status === 'complete' ? '#10b981' : '#ef4444'} !important;
+                        stroke: ${node.status === 'complete' ? '#047857' : '#b91c1c'} !important;
+                    }
+                `;
+                document.head.appendChild(styleTag);
+                
+                // Clear any existing interval to avoid multiple animations
+                if (node.pulseInterval) clearInterval(node.pulseInterval);
+                
+                // Setup pulsing animation that also reapplies colors
+                node.pulseInterval = setInterval(() => {
+                    const nodeEl = d3.select(`.node-circle-${node.id}`);
+                    // First apply correct colors
+                    if (node.status === 'complete') {
+                        nodeEl.style("fill", "#10b981")
+                              .style("stroke", "#047857")
+                              .attr("fill", "#10b981")
+                              .attr("stroke", "#047857");
+                    } else {
+                        nodeEl.style("fill", "#ef4444")
+                              .style("stroke", "#b91c1c")
+                              .attr("fill", "#ef4444")
+                              .attr("stroke", "#b91c1c");
+                    }
+                    
+                    // Then do the pulse animation
+                    nodeEl.transition()
+                        .duration(800)
+                        .attr("r", 28)
+                        .transition()
+                        .duration(800)
+                        .attr("r", 25);
+                }, 1600);
+            }
         }
 
         // Update progress arcs for all nodes
@@ -476,6 +655,61 @@
             document.getElementById('testModeBanner').classList.remove('hidden');
         }
 
+        // Function to directly fix node colors - can be called at any time
+        function fixNodeColors() {
+            console.log("🔧 Fixing node colors for all sandboxes");
+            
+            // Loop through all sandbox nodes
+            sandboxNodes.forEach(node => {
+                if (node.status === 'complete' || node.status === 'error') {
+                    const nodeId = node.id;
+                    const selector = `.node-circle-${nodeId}`;
+                    
+                    // Get the SVG element
+                    const svgEl = document.querySelector(selector);
+                    const color = node.status === 'complete' ? 
+                                  {fill: '#10b981', stroke: '#047857'} : 
+                                  {fill: '#ef4444', stroke: '#b91c1c'};
+                    
+                    console.log(`🎨 Setting ${node.status} colors for node ${nodeId}: ${color.fill}/${color.stroke}`);
+                    
+                    // Apply colors using DOM API
+                    if (svgEl) {
+                        svgEl.setAttribute('fill', color.fill);
+                        svgEl.setAttribute('stroke', color.stroke);
+                        svgEl.style.fill = color.fill;
+                        svgEl.style.stroke = color.stroke;
+                    }
+                    
+                    // Also apply with D3 for good measure
+                    d3.select(selector)
+                      .style("fill", color.fill)
+                      .style("stroke", color.stroke)
+                      .attr("fill", color.fill)
+                      .attr("stroke", color.stroke);
+                }
+            });
+        }
+        
+        // We'll also patch socket listener to call our fix colors function
+        const originalSocketHandler = socket.on;
+        socket.on = function(event, handler) {
+            if (event === 'sandbox_status') {
+                const wrappedHandler = function(data) {
+                    // Call the original handler
+                    handler(data);
+                    
+                    // If this is a complete or error status, fix colors
+                    if (data.status === 'complete' || data.status === 'error') {
+                        console.log(`💫 Status event for node ${data.sandbox_id}: ${data.status} - calling fixNodeColors`);
+                        setTimeout(fixNodeColors, 100);  // Small delay to ensure everything is updated
+                    }
+                };
+                return originalSocketHandler.call(this, event, wrappedHandler);
+            }
+            return originalSocketHandler.call(this, event, handler);
+        };
+        
         document.getElementById('codeForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
@@ -489,7 +723,10 @@
             const evaluationResult = document.getElementById('evaluationResult');
             const implementationsContainer = document.getElementById('implementationsContainer');
 
-            // Reset visualization
+            // Reset visualization and clean up intervals
+            sandboxNodes.forEach(node => {
+                if (node.pulseInterval) clearInterval(node.pulseInterval);
+            });
             sandboxNodes = [];
             currentSessionId = null;
 
@@ -533,13 +770,16 @@
                 }
 
                 // Display evaluation result
-                const evaluationText = data.evaluation && data.evaluation.evaluation
+                let evaluationText = data.evaluation && data.evaluation.evaluation
                     ? data.evaluation.evaluation
                     : 'No evaluation available';
 
+                // Replace "implementation" with "agent" in the evaluation text
+                evaluationText = evaluationText.replace(/implementation (\d+)/gi, 'Agent $1');
+                
                 evaluationResult.textContent = evaluationText;
 
-                // Show best implementation output preview if available
+                // Show best agent output preview if available
                 const bestOutputPreview = document.getElementById('bestOutputPreview');
                 const bestOutputContent = document.getElementById('bestOutputContent');
 
@@ -584,10 +824,10 @@
                     document.getElementById('sandboxCount').textContent = data.results.length;
                 }
 
-                // Clear previous implementations
+                // Clear previous agent results
                 implementationsContainer.innerHTML = '';
 
-                // Add implementation results
+                // Add agent results
                 if (Array.isArray(data.results)) {
                     data.results.forEach((result, index) => {
                         const implementationDiv = document.createElement('div');
@@ -597,19 +837,35 @@
                         // Highlight the best implementation if it matches the evaluation result
                         const isBestImpl = data.evaluation &&
                             data.evaluation.best_implementation_index === (index + 1);
-
-                        header.className = isBestImpl
-                            ? 'bg-green-200 px-4 py-2 font-semibold flex items-center justify-between'
-                            : 'bg-gray-200 px-4 py-2 font-semibold flex items-center justify-between';
+                        
+                        // Check if implementation succeeded or failed
+                        const isSuccess = result.execution_result === 'Success';
+                        
+                        // Determine header color based on status
+                        let headerClass = 'px-4 py-2 font-semibold flex items-center justify-between';
+                        if (isBestImpl) {
+                            headerClass = 'bg-green-200 ' + headerClass;
+                        } else if (!isSuccess) {
+                            headerClass = 'bg-red-200 ' + headerClass;
+                        } else {
+                            headerClass = 'bg-gray-200 ' + headerClass;
+                        }
+                        
+                        header.className = headerClass;
 
                         const titleSpan = document.createElement('span');
-                        titleSpan.textContent = `Implementation ${index + 1}`;
+                        titleSpan.textContent = `Agent ${index + 1}`;
                         header.appendChild(titleSpan);
 
                         if (isBestImpl) {
                             const badgeSpan = document.createElement('span');
                             badgeSpan.className = 'bg-green-600 text-white text-xs px-2 py-1 rounded-full';
                             badgeSpan.textContent = 'Best Solution';
+                            header.appendChild(badgeSpan);
+                        } else if (!isSuccess) {
+                            const badgeSpan = document.createElement('span');
+                            badgeSpan.className = 'bg-red-600 text-white text-xs px-2 py-1 rounded-full';
+                            badgeSpan.textContent = 'Failed';
                             header.appendChild(badgeSpan);
                         }
 
@@ -714,15 +970,14 @@
                         outputContent.textContent = result.execution_output || 'No output available';
                         outputSection.appendChild(outputContent);
 
-                        // Add execution status
+                        // Add execution status with more visual indication
                         const statusDiv = document.createElement('div');
-                        statusDiv.className = 'mt-2 text-sm';
                         if (result.execution_result === 'Success') {
-                            statusDiv.className += ' text-green-600';
-                            statusDiv.textContent = 'Status: Success';
+                            statusDiv.className = 'mt-2 text-sm px-3 py-1 bg-green-100 text-green-800 rounded-md inline-block';
+                            statusDiv.innerHTML = '✓ <strong>Success</strong>';
                         } else {
-                            statusDiv.className += ' text-red-600';
-                            statusDiv.textContent = `Status: ${result.execution_result}`;
+                            statusDiv.className = 'mt-2 text-sm px-3 py-1 bg-red-100 text-red-800 rounded-md inline-block';
+                            statusDiv.innerHTML = '✗ <strong>Failed</strong>: ' + (result.error || result.execution_result);
                         }
                         outputSection.appendChild(statusDiv);
 
@@ -742,6 +997,11 @@
                 // Show results
                 loadingIndicator.classList.add('hidden');
                 resultsContainer.classList.remove('hidden');
+                
+                // Fix node colors after results are shown
+                setTimeout(fixNodeColors, 500);
+                // And again after a longer delay to catch any overrides
+                setTimeout(fixNodeColors, 2000);
 
             } catch (error) {
                 console.error('Error:', error);

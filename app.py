@@ -27,6 +27,7 @@ print("Loaded environment variables:")
 print(f"DAYTONA_API_KEY: {'Present' if os.environ.get('DAYTONA_API_KEY') else 'Missing'}")
 print(f"DAYTONA_TARGET: {'Present' if os.environ.get('DAYTONA_TARGET') else 'Missing'}")
 print(f"GROQ_API_KEY: {'Present' if os.environ.get('GROQ_API_KEY') else 'Missing'}")
+print(f"MAX_SANDBOXES: {os.environ.get('MAX_SANDBOXES', 10)}")
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -45,28 +46,28 @@ def create_sandbox(code_to_upload=None):
     """Create a Daytona sandbox and optionally upload code to it"""
     start_time = time.time()
     params = CreateSandboxParams(language="python")
-    
+
     # Get environment variables
     groq_api_key = os.getenv("GROQ_API_KEY")
     print(f"DEBUG: Using GROQ_API_KEY: {'Present' if groq_api_key else 'Missing'}")
-    
+
     sandbox = daytona.create(params)
     creation_time = time.time() - start_time
     print(f"DEBUG: Created sandbox in {creation_time:.2f}s: {sandbox}")
-    
+
     # Add creation time to sandbox object for tracking
     sandbox.creation_time = creation_time
-    
+
     # Set environment variables in the sandbox
     try:
         print("DEBUG: Setting environment variables in the sandbox")
         # Get environment variables
         groq_api_key = os.getenv("GROQ_API_KEY")
-        
+
         # Create a modified task runner file with the API key directly embedded
         with open('sandbox_task_runner.py', 'r') as f:
             task_runner_content = f.read()
-            
+
         # Insert the API key directly into the task runner file
         modified_task_runner = task_runner_content.replace(
             'import os\nimport json\nimport sys\nfrom groq import Groq',
@@ -79,42 +80,28 @@ from groq import Groq
 os.environ["GROQ_API_KEY"] = "{groq_api_key}"
 print("DEBUG[sandbox]: Hard-coded GROQ_API_KEY is present:", bool(os.environ.get("GROQ_API_KEY")))'''
         )
-        
+
         # Save this modified version to a temp directory to avoid triggering Flask reload
         import tempfile
         temp_dir = tempfile.gettempdir()
         modified_runner_path = os.path.join(temp_dir, 'modified_task_runner.py')
         with open(modified_runner_path, 'w') as f:
             f.write(modified_task_runner)
-            
+
         print("DEBUG: Created modified task runner with embedded API key")
-            
-        # Also create and upload a .env file as a backup method
-        env_file_content = f'''
-# Environment variables for sandbox
-GROQ_API_KEY={groq_api_key}
-'''
-        with open('temp_env.txt', 'w') as f:
-            f.write(env_file_content)
-        
-        # Upload the environment file to the sandbox
-        sandbox.fs.upload_file("/home/daytona/.env", open('temp_env.txt', 'rb').read())
-        
+
         # Set environment variables using process.exec
         print("DEBUG: Setting environment variables using process.exec")
         response = sandbox.process.exec(f"export GROQ_API_KEY={groq_api_key}")
         print(f"DEBUG: Environment variable set response: {response.result}")
-        
-        # Remove the temporary file
-        os.remove('temp_env.txt')
     except Exception as e:
         print(f"DEBUG: Error setting environment variables: {str(e)}")
-    
+
     if code_to_upload:
         # Upload code to the sandbox
         try:
             print("DEBUG: Uploading code to the sandbox")
-            
+
             # Create a directory for our files if needed
             try:
                 # Create a directory in the home folder to store our files
@@ -122,17 +109,17 @@ GROQ_API_KEY={groq_api_key}
                 print("DEBUG: Created labruno directory in sandbox")
             except Exception as e:
                 print(f"DEBUG: Directory may already exist: {str(e)}")
-            
+
             # Use Daytona's file upload mechanism with proper permissions
             file_path = "/home/daytona/labruno/sandbox_task_runner.py"
             sandbox.fs.upload_file(file_path, code_to_upload.encode('utf-8'))
-            
+
             # Make it executable
             sandbox.fs.set_file_permissions(file_path, mode="755")
             print(f"DEBUG[sandbox]: Code uploaded successfully to {file_path}")
         except Exception as e:
             print(f"DEBUG: Error uploading code: {str(e)}")
-    
+
     return sandbox
 
 def prepare_sandbox(sandbox, task_runner_code):
@@ -141,14 +128,14 @@ def prepare_sandbox(sandbox, task_runner_code):
     try:
         # Create directory structure
         sandbox.fs.create_folder("/home/daytona/labruno", "755")
-        
+
         # Upload the task runner file
         file_path = "/home/daytona/labruno/sandbox_task_runner.py"
         sandbox.fs.upload_file(file_path, task_runner_code.encode('utf-8'))
-        
+
         # Make it executable
         sandbox.fs.set_file_permissions(file_path, mode="755")
-        
+
         # Also upload the .env file as a backup
         groq_api_key = os.getenv("GROQ_API_KEY")
         env_file_content = f'''
@@ -156,17 +143,17 @@ def prepare_sandbox(sandbox, task_runner_code):
 GROQ_API_KEY={groq_api_key}
 '''
         sandbox.fs.upload_file("/home/daytona/.env", env_file_content.encode('utf-8'))
-        
+
         # Set environment variables using process.exec
         print("DEBUG: Setting environment variables using process.exec")
         response = sandbox.process.exec(f"export GROQ_API_KEY={groq_api_key}")
         print(f"DEBUG: Environment variable set response: {response.result}")
-        
+
         # Calculate preparation time
         prep_time = time.time() - start_time
         sandbox.prep_time = prep_time
         print(f"DEBUG: Prepared sandbox in {prep_time:.2f}s")
-        
+
         return sandbox
     except Exception as e:
         print(f"DEBUG: Error preparing sandbox: {str(e)}")
@@ -175,17 +162,17 @@ GROQ_API_KEY={groq_api_key}
 def generate_and_execute_code(sandbox, user_input, task_runner_path=None):
     """Generate and execute code in a sandbox based on user input"""
     print(f"DEBUG: In generate_and_execute_code with sandbox: {sandbox}")
-    
+
     # Start timing for code generation and execution
     gen_start_time = time.time()
-    
+
     # Use Groq API to generate code
     try:
         print(f"DEBUG: Running code in sandbox to generate and execute code")
         # No indentation in the executed code to prevent errors
         # Properly escape the user input to avoid issues with quotes
         safe_user_input = user_input.replace('\\', '\\\\').replace('"', '\\"')
-        
+
         # Prepare code based on whether we have a task runner or need to do direct execution
         if task_runner_path:
             # If we have a task runner path, use it to delegate execution
@@ -201,33 +188,33 @@ try:
     # Execute the task runner directly as a Python script
     task_runner_path = "{task_runner_path}"
     print(f"DEBUG[sandbox]: Loading task runner from {{task_runner_path}}")
-    
+
     # Add the directory to Python path
     dir_path = os.path.dirname(task_runner_path)
     if dir_path not in sys.path:
         sys.path.insert(0, dir_path)
-    
+
     # Load the module directly from the file
     import importlib.util
     spec = importlib.util.spec_from_file_location("sandbox_task_runner", task_runner_path)
     task_runner = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(task_runner)
-    
+
     print("DEBUG[sandbox]: Successfully loaded task runner")
-    
+
     # Use task runner to process the request
     user_input = "{safe_user_input}"
     print(f"DEBUG[sandbox]: Processing task: {{user_input}}")
     result = task_runner.process_task(user_input)
     print("DEBUG[sandbox]: Task processing complete")
-    
+
     # Print the result so it can be captured
     print(json.dumps(result))
 except Exception as e:
     print("DEBUG[sandbox]: Error using task runner:", str(e))
     import traceback
     print(traceback.format_exc())
-    
+
     # Return error information
     error_result = {{
         "error": str(e),
@@ -248,7 +235,7 @@ from groq import Groq
 def run_code_generation_and_execution():
     print("DEBUG[sandbox]: Starting code generation process (no task runner)")
     print("DEBUG[sandbox]: Environment variables:", os.environ)
-    
+
     # Initialize Groq client
     try:
         groq_api_key = os.environ.get("GROQ_API_KEY")
@@ -258,15 +245,15 @@ def run_code_generation_and_execution():
     except Exception as e:
         print("DEBUG[sandbox]: Error initializing Groq client:", str(e))
         raise
-    
+
     # Generate code using LLaMA 4
     try:
         print("DEBUG[sandbox]: Creating chat completion with LLaMA 4")
         chat_completion = client.chat.completions.create(
             messages=[
                 {{
-                    "role": "system", 
-                    "content": "You are a helpful AI assistant that generates Python code based on user requests. Generate ONLY the Python code without any explanations or markdown formatting."
+                    "role": "system",
+                    "content": "You are a helpful AI assistant that generates Python code based on user requests. Generate ONLY the Python code without any explanations or markdown formatting. Never write instructions. Only respond with the code."
                 }},
                 {{
                     "role": "user",
@@ -279,7 +266,7 @@ def run_code_generation_and_execution():
     except Exception as e:
         print("DEBUG[sandbox]: Error creating chat completion:", str(e))
         raise
-    
+
     # Extract the generated code
     try:
         generated_code = chat_completion.choices[0].message.content
@@ -287,7 +274,7 @@ def run_code_generation_and_execution():
     except Exception as e:
         print("DEBUG[sandbox]: Error extracting generated code:", str(e))
         raise
-    
+
     # Save the generated code to a file
     try:
         with open("generated_code.py", "w") as f:
@@ -296,20 +283,20 @@ def run_code_generation_and_execution():
     except Exception as e:
         print("DEBUG[sandbox]: Error saving generated code:", str(e))
         raise
-    
+
     # No special case handling needed anymore
-    
+
     # Execute the generated code and capture output
     try:
         import sys
         from io import StringIO
         import traceback
-        
+
         print("DEBUG[sandbox]: Executing generated code")
         output = StringIO()
         original_stdout = sys.stdout
         sys.stdout = output
-        
+
         try:
             # Use a dedicated namespace to avoid conflicts
             exec_namespace = {}
@@ -321,14 +308,14 @@ def run_code_generation_and_execution():
             trace = traceback.format_exc()
             execution_result = "Error: {{}}\\n{{}}".format(error_msg, trace)
             print("DEBUG[sandbox]: Code execution failed:", error_msg)
-        
+
         sys.stdout = original_stdout
         execution_output = output.getvalue()
         print("DEBUG[sandbox]: Execution output length:", len(execution_output))
     except Exception as e:
         print("DEBUG[sandbox]: Error during execution setup:", str(e))
         raise
-    
+
     # Save the execution result to a file
     try:
         with open("execution_output.txt", "w") as f:
@@ -337,7 +324,7 @@ def run_code_generation_and_execution():
     except Exception as e:
         print("DEBUG[sandbox]: Error saving execution output:", str(e))
         raise
-    
+
     # Return the results
     try:
         result = {{
@@ -345,11 +332,11 @@ def run_code_generation_and_execution():
             "execution_output": execution_output,
             "execution_result": execution_result
         }}
-        
+
         with open("result.json", "w") as f:
             json.dump(result, f)
         print("DEBUG[sandbox]: Result JSON saved to file")
-        
+
         print("DEBUG[sandbox]: Returning result")
         print(json.dumps(result))
         return result
@@ -363,16 +350,16 @@ result = run_code_generation_and_execution()
 
         result = sandbox.process.code_run(code_template)
         print(f"DEBUG: Sandbox code execution completed")
-        
+
         # Get the result text
         result_text = result.result if hasattr(result, 'result') else str(result)
         print(f"DEBUG: Result preview: {result_text[:100]}...")
-        
+
         try:
             # Try to find JSON in the output
             import re
             json_pattern = r'\{[\s\S]*\}'  # Match any JSON-like structure
-            
+
             # First, look for explicit JSON output
             matches = []
             for line in result_text.splitlines():
@@ -382,7 +369,7 @@ result = run_code_generation_and_execution()
                         parsed_result = json.loads(line)
                         if isinstance(parsed_result, dict) and 'generated_code' in parsed_result:
                             print(f"DEBUG: Found valid JSON result")
-                            
+
                             # Check for empty execution output
                             if not parsed_result.get('execution_output'):
                                 print("DEBUG: Empty execution output detected, looking for output in logs...")
@@ -391,12 +378,12 @@ result = run_code_generation_and_execution()
                                 if direct_output:
                                     parsed_result['execution_output'] = direct_output.group(1)
                                     print(f"DEBUG: Found direct execution output: {parsed_result['execution_output']}")
-                            
+
                             return parsed_result
                         matches.append(line)
                     except:
                         pass
-                        
+
             # If we found potential JSON matches, try them in order
             for match in matches:
                 try:
@@ -410,7 +397,7 @@ result = run_code_generation_and_execution()
                             parsed_result['execution_output'] = "Output not available"
                         if 'execution_result' not in parsed_result:
                             parsed_result['execution_result'] = "Unknown"
-                            
+
                         # Check for empty execution output
                         if not parsed_result.get('execution_output'):
                             print("DEBUG: Empty execution output detected, looking for output in logs...")
@@ -428,11 +415,11 @@ result = run_code_generation_and_execution()
                                 if print_lines:
                                     parsed_result['execution_output'] = "\n".join(print_lines)
                                     print(f"DEBUG: Constructed output from logs: {parsed_result['execution_output']}")
-                        
+
                         return parsed_result
                 except:
                     pass
-            
+
             # If we couldn't find valid JSON, do a full regex search
             json_matches = re.findall(json_pattern, result_text)
             for match in json_matches:
@@ -447,7 +434,7 @@ result = run_code_generation_and_execution()
                             parsed_result['execution_output'] = "Output not available"
                         if 'execution_result' not in parsed_result:
                             parsed_result['execution_result'] = "Unknown"
-                        
+
                         # Check for empty execution output
                         if not parsed_result.get('execution_output'):
                             print("DEBUG: Empty execution output detected, looking for output in logs...")
@@ -465,18 +452,18 @@ result = run_code_generation_and_execution()
                                 if print_lines:
                                     parsed_result['execution_output'] = "\n".join(print_lines)
                                     print(f"DEBUG: Constructed output from logs: {parsed_result['execution_output']}")
-                                    
+
                         return parsed_result
                 except:
                     pass
-                    
+
             # If no JSON is found, create a result from the stdout
             print(f"DEBUG: Creating result from stdout")
             # Try to extract code blocks if they exist
             code_pattern = r'```python\s*(.*?)\s*```'
             code_match = re.search(code_pattern, result_text, re.DOTALL)
             generated_code = code_match.group(1) if code_match else result_text
-            
+
             # Look for direct execution output
             execution_output = ""
             direct_output = re.search(r"Direct execution output: '([^']*)'", result_text)
@@ -491,7 +478,7 @@ result = run_code_generation_and_execution()
                         output_lines.append(line)
                 if output_lines:
                     execution_output = "\n".join(output_lines)
-                    
+
             # Create a fallback result
             return {
                 "generated_code": generated_code,
@@ -503,12 +490,12 @@ result = run_code_generation_and_execution()
             print(f"DEBUG: Raw result: {result.result if hasattr(result, 'result') else str(result)}")
             gen_time = time.time() - gen_start_time
             return {
-                "error": f"Failed to parse result: {str(e)}", 
+                "error": f"Failed to parse result: {str(e)}",
                 "generated_code": "Error parsing result",
                 "execution_output": result.result if hasattr(result, 'result') else str(result),
                 "execution_time": gen_time
             }
-            
+
     except Exception as e:
         print(f"DEBUG: Exception in generate_and_execute_code: {str(e)}")
         import traceback
@@ -524,7 +511,7 @@ result = run_code_generation_and_execution()
 def evaluate_results(main_sandbox, results):
     """Evaluate which implementation is the best based on success and output"""
     print(f"DEBUG: In evaluate_results with {len(results)} results")
-    
+
     # Prepare the evaluation input
     try:
         evaluation_input = json.dumps(results)
@@ -532,18 +519,18 @@ def evaluate_results(main_sandbox, results):
     except Exception as e:
         print(f"DEBUG: Error serializing results to JSON: {str(e)}")
         return {"error": f"Failed to serialize results: {str(e)}", "evaluation": "Error preparing evaluation"}
-    
+
     # Identify implementations that at least ran without errors
     # First try to get ones that actually succeeded
     successful_results = [r for r in results if r.get('execution_result') == 'Success']
     print(f"DEBUG: Found {len(successful_results)} successful implementations")
-    
+
     # If no implementation succeeded, be more lenient and accept any that have code generated
     if not successful_results:
         # Look for any results that at least have generated code
         any_code_results = [r for r in results if r.get('generated_code') and r.get('generated_code') != 'Error' and r.get('generated_code') != 'Error occurred']
         print(f"DEBUG: Found {len(any_code_results)} implementations with code generated")
-        
+
         if any_code_results:
             successful_results = any_code_results
         else:
@@ -552,41 +539,41 @@ def evaluate_results(main_sandbox, results):
             }
             print(f"DEBUG: No successful implementations found")
             return evaluation
-    
+
     # Basic heuristic for finding the best implementation
     # 1. Rank by success (already filtered)
     # 2. Rank by code length (shorter is often better)
     # 3. Rank by output length (more output might indicate better results)
-    
+
     # Sort first by success, then by code length (shorter is better), then by output length (longer might be better)
     ranked_results = sorted(
-        successful_results, 
+        successful_results,
         key=lambda r: (
             0 if r.get('execution_result') == 'Success' else 1,
             len(r.get('generated_code', '')),
             -len(r.get('execution_output', ''))
         )
     )
-    
+
     # Get the best implementation
     best_impl = ranked_results[0] if ranked_results else None
     best_impl_index = results.index(best_impl) if best_impl in results else -1
-    
+
     # Generate an evaluation
     if best_impl:
         # Extract a snippet of the output to include in the evaluation
         output_snippet = best_impl.get('execution_output', '')[:100] + '...' if len(best_impl.get('execution_output', '')) > 100 else best_impl.get('execution_output', '')
-        
+
         evaluation = {
-            "evaluation": f"After analyzing the available implementations, I've determined that implementation {best_impl_index + 1} is the best solution. It executes successfully and produces the expected output. The code is concise and follows good programming practices. Output: {output_snippet}",
+            "evaluation": f"After analyzing the available agents, I've determined that Agent {best_impl_index + 1} is the best solution. It executes successfully and produces the expected output. The code is concise and follows good programming practices. Output: {output_snippet}",
             "best_implementation_index": best_impl_index + 1,
             "best_implementation": best_impl
         }
     else:
         evaluation = {
-            "evaluation": "After analyzing the available implementations, I couldn't determine a clear winner. Multiple implementations succeeded, but none stood out as significantly better than the others."
+            "evaluation": "After analyzing the available agents, I couldn't determine a clear winner. Multiple agents succeeded, but none stood out as significantly better than the others."
         }
-    
+
     print(f"DEBUG: Generated evaluation: {evaluation}")
     return evaluation
 
@@ -602,21 +589,24 @@ def execute():
     results = []
     evaluation = {"error": "Not started"}
     timing_data = {}
-    
+
     # Generate a unique session ID for this execution run
     session_id = str(uuid.uuid4())
-    
+
     # Validate input and sandbox count
     if not user_input:
         return jsonify({"error": "No input provided"}), 400
-        
+
+    # Get MAX_SANDBOXES from environment variable or default to 10
+    max_sandboxes = int(os.environ.get("MAX_SANDBOXES", 10))
+
     try:
         sandbox_count = int(sandbox_count)
-        if sandbox_count < 1 or sandbox_count > 10:
+        if sandbox_count < 1 or sandbox_count > max_sandboxes:
             sandbox_count = 3  # Default to 3 if out of range
     except ValueError:
         sandbox_count = 3  # Default to 3 if not a valid number
-        
+
     # Initialize sandbox status tracking
     sandbox_status = {}
     for i in range(sandbox_count):
@@ -624,7 +614,7 @@ def execute():
             'status': 'pending',
             'progress': 0
         }
-        
+
     # Send all sandbox statuses at once with a small delay
     # This helps ensure the frontend receives them properly
     def emit_initial_status():
@@ -638,19 +628,19 @@ def execute():
                 'status': 'pending',
                 'progress': 0
             })
-            
+
     # Start emitting in a background thread to not block request
     import threading
     threading.Thread(target=emit_initial_status).start()
-    
+
     try:
         print(f"DEBUG: Starting execution with input: {user_input}")
-        
+
         # Create main sandbox
         print("DEBUG: Creating main sandbox...")
         main_sandbox = create_sandbox()
         print(f"DEBUG: Main sandbox created: {main_sandbox}")
-        
+
         # Upload task runner code to main sandbox
         try:
             print("DEBUG: Uploading task runner code to main sandbox...")
@@ -661,44 +651,44 @@ def execute():
                 print("DEBUG: Created labruno directory in sandbox")
             except Exception as e:
                 print(f"DEBUG: Directory may already exist: {str(e)}")
-                
+
             # Use the modified task runner with embedded API key
             modified_runner_path = os.path.join(tempfile.gettempdir(), 'modified_task_runner.py')
             with open(modified_runner_path, 'r') as f:
                 task_runner_code = f.read()
-                
+
             # Use Daytona's built-in file upload mechanism to the home directory
             file_path = "/home/daytona/labruno/sandbox_task_runner.py"
             main_sandbox.fs.upload_file(file_path, task_runner_code.encode('utf-8'))
             print(f"DEBUG: Task runner code uploaded to main sandbox at {file_path}")
-            
+
             # Make sure it's executable
             main_sandbox.fs.set_file_permissions(file_path, mode="755")
             print("DEBUG: Set executable permissions on task runner")
-            
+
             # Set the path where the task runner will be located
             task_runner_path = file_path
             print(f"DEBUG: Task runner path set to: {task_runner_path}")
-            
+
         except Exception as e:
             print(f"DEBUG: Error uploading task runner code: {str(e)}")
             raise
-        
+
         # Create sandboxes in parallel using ThreadPoolExecutor
         print(f"DEBUG: Creating {sandbox_count} sandboxes concurrently...")
         sandboxes = []
-        
+
         # Read the modified task runner with embedded API key
         modified_runner_path = os.path.join(tempfile.gettempdir(), 'modified_task_runner.py')
         with open(modified_runner_path, 'r') as f:
             task_runner_code = f.read()
-        
+
         # Function to create and prepare a sandbox concurrently
         def create_and_prepare_sandbox():
             try:
                 # Get the sandbox ID from the thread context
                 sandbox_id = getattr(threading.current_thread(), 'sandbox_id', -1)
-                
+
                 # Update status to creating
                 if sandbox_id >= 0:
                     sandbox_status[sandbox_id]['status'] = 'creating'
@@ -709,10 +699,10 @@ def execute():
                         'status': 'creating',
                         'progress': 20
                     })
-                
+
                 # Sandbox creation is already timed inside the function
                 sandbox = create_sandbox()
-                
+
                 # Update status to preparing
                 if sandbox_id >= 0:
                     sandbox_status[sandbox_id]['status'] = 'preparing'
@@ -723,13 +713,13 @@ def execute():
                         'status': 'preparing',
                         'progress': 40
                     })
-                
+
                 prepared_sandbox = prepare_sandbox(sandbox, task_runner_code)
-                
+
                 # Calculate total sandbox preparation time
                 total_prep_time = getattr(sandbox, 'creation_time', 0) + getattr(prepared_sandbox, 'prep_time', 0)
                 prepared_sandbox.total_prep_time = total_prep_time
-                
+
                 # Update status to ready
                 if sandbox_id >= 0:
                     sandbox_status[sandbox_id]['status'] = 'ready'
@@ -740,11 +730,11 @@ def execute():
                         'status': 'ready',
                         'progress': 60
                     })
-                
+
                 return prepared_sandbox
             except Exception as e:
                 print(f"DEBUG: Error creating and preparing sandbox: {str(e)}")
-                
+
                 # Update status to error
                 if sandbox_id >= 0:
                     sandbox_status[sandbox_id]['status'] = 'error'
@@ -755,14 +745,14 @@ def execute():
                         'status': 'error',
                         'progress': 0
                     })
-                
+
                 return None
-        
+
         # Store sandbox creation start time
         sandbox_start_times = {}
-        
+
         # Create sandboxes concurrently
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=max_sandboxes) as executor:
             # Submit sandbox creation tasks with thread local storage for sandbox_id
             future_to_sandbox = {}
             for i in range(sandbox_count):
@@ -771,14 +761,14 @@ def execute():
                     # Set the sandbox_id on the thread
                     threading.current_thread().sandbox_id = i
                     return create_and_prepare_sandbox()
-                
+
                 future = executor.submit(task_with_id)
                 future_to_sandbox[future] = i
-            
+
             # Track start time for each sandbox
             for i in range(sandbox_count):
                 sandbox_start_times[i] = time.time()
-            
+
             # Collect results as they complete
             for future in as_completed(future_to_sandbox):
                 sandbox_id = future_to_sandbox[future]
@@ -792,18 +782,18 @@ def execute():
                         sandboxes.append(sandbox)
                 except Exception as e:
                     print(f"DEBUG: Error with sandbox {sandbox_id+1}: {str(e)}")
-        
+
         print(f"DEBUG: Successfully created {len(sandboxes)} sandboxes concurrently")
-        
+
         # Run code generation and execution in parallel
         print("DEBUG: Running code generation and execution concurrently...")
-        
+
         # Function to process a sandbox concurrently
         def process_sandbox(sandbox_with_id):
             sandbox, sandbox_id = sandbox_with_id
             try:
                 print(f"DEBUG: Processing sandbox {sandbox_id+1}...")
-                
+
                 # Update status to generating
                 sandbox_status[sandbox_id]['status'] = 'generating'
                 sandbox_status[sandbox_id]['progress'] = 70
@@ -813,10 +803,10 @@ def execute():
                     'status': 'generating',
                     'progress': 70
                 })
-                
+
                 # Start code generation
                 result = generate_and_execute_code(sandbox, user_input, task_runner_path)
-                
+
                 # Update status to executing
                 sandbox_status[sandbox_id]['status'] = 'executing'
                 sandbox_status[sandbox_id]['progress'] = 85
@@ -826,11 +816,11 @@ def execute():
                     'status': 'executing',
                     'progress': 85
                 })
-                
+
                 # Add sandbox creation time to result
                 result['sandbox_creation_time'] = getattr(sandbox, 'creation_time', 0)
                 result['total_prep_time'] = getattr(sandbox, 'total_prep_time', 0)
-                
+
                 # Calculate total sandbox time from the very beginning of sandbox creation
                 # This represents the complete sandbox lifetime from request to completion
                 if hasattr(sandbox, 'creation_start_time'):
@@ -841,28 +831,39 @@ def execute():
                     result['total_sandbox_time'] = time.time() - result['sandbox_start_time']
                     # Remove the temporary start timestamp as it's no longer needed
                     del result['sandbox_start_time']
-                
+
                 # Add task information
                 result['sandbox_id'] = sandbox_id + 1
-                
-                # Update status to complete
-                status = 'error' if result.get('error') or result.get('execution_result') != 'Success' else 'complete'
-                progress = 100 if status == 'complete' else 90
-                
+
+                # Update status to complete or error based on execution result
+                if result.get('error') or result.get('execution_result') != 'Success':
+                    status = 'error'
+                    progress = 90
+                else:
+                    status = 'complete'
+                    progress = 100
+
                 sandbox_status[sandbox_id]['status'] = status
                 sandbox_status[sandbox_id]['progress'] = progress
-                socketio.emit('sandbox_status', {
-                    'session_id': session_id,
-                    'sandbox_id': sandbox_id,
-                    'status': status,
-                    'progress': progress
-                })
                 
+                print(f"DEBUG: Emitting final status for sandbox {sandbox_id}: {status}")
+                
+                # Send several status updates to ensure it's received and processed
+                # Sometimes socket messages can be dropped, so we send multiple
+                for _ in range(3):  # Send 3 times with small delays
+                    socketio.emit('sandbox_status', {
+                        'session_id': session_id,
+                        'sandbox_id': sandbox_id,
+                        'status': status,
+                        'progress': progress
+                    })
+                    time.sleep(0.1)  # Small delay between emissions
+
                 print(f"DEBUG: Result from sandbox {sandbox_id+1} (exec time: {result.get('execution_time', 0):.2f}s): {result}")
                 return result
             except Exception as e:
                 print(f"DEBUG: Error processing sandbox {sandbox_id+1}: {str(e)}")
-                
+
                 # Update status to error
                 sandbox_status[sandbox_id]['status'] = 'error'
                 sandbox_status[sandbox_id]['progress'] = 0
@@ -872,10 +873,10 @@ def execute():
                     'status': 'error',
                     'progress': 0
                 })
-                
+
                 return {
-                    "error": str(e), 
-                    "generated_code": "Error", 
+                    "error": str(e),
+                    "generated_code": "Error",
                     "execution_output": str(e),
                     "sandbox_id": sandbox_id + 1,
                     "sandbox_creation_time": getattr(sandbox, 'creation_time', 0),
@@ -883,15 +884,15 @@ def execute():
                     "total_prep_time": getattr(sandbox, 'total_prep_time', 0),
                     "execution_time": 0
                 }
-        
+
         # Process all sandboxes concurrently
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=max_sandboxes) as executor:
             # Submit sandbox processing tasks
             sandbox_with_ids = [(sandbox, i) for i, sandbox in enumerate(sandboxes)]
             results = list(executor.map(process_sandbox, sandbox_with_ids))
-        
+
         print(f"DEBUG: Collected {len(results)} results concurrently")
-        
+
         # Evaluate results
         if results:
             print("DEBUG: Evaluating results...")
@@ -903,10 +904,10 @@ def execute():
                 evaluation = {"error": str(e), "evaluation": "Failed to evaluate results"}
         else:
             evaluation = {"error": "No results to evaluate", "evaluation": "No results were generated to evaluate"}
-        
+
         # Clean up sandboxes concurrently
         print("DEBUG: Cleaning up sandboxes concurrently...")
-        
+
         def remove_sandbox(sandbox_with_id):
             sandbox, sandbox_id = sandbox_with_id
             try:
@@ -916,19 +917,19 @@ def execute():
             except Exception as e:
                 print(f"DEBUG: Error removing sandbox {sandbox_id+1}: {str(e)}")
                 return False
-        
+
         # Clean up all sandboxes concurrently
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=max_sandboxes) as executor:
             sandbox_with_ids = [(sandbox, i) for i, sandbox in enumerate(sandboxes)]
             list(executor.map(remove_sandbox, sandbox_with_ids))
-        
+
         # Clean up main sandbox
         try:
             print("DEBUG: Removing main sandbox...")
             daytona.remove(main_sandbox)
         except Exception as e:
             print(f"DEBUG: Error removing main sandbox: {str(e)}")
-        
+
     except Exception as e:
         import traceback
         print(f"DEBUG: CRITICAL ERROR: {str(e)}")
@@ -938,14 +939,14 @@ def execute():
             "results": [],
             "evaluation": {"evaluation": f"Error: {str(e)}"}
         })
-    
+
     # Calculate total execution time
     total_execution_time = time.time() - start_time
     timing_data["total_execution_time"] = total_execution_time
-    
+
     print(f"DEBUG: Total execution time: {total_execution_time:.2f}s")
     print("DEBUG: Returning results to client")
-    
+
     return jsonify({
         "results": results,
         "evaluation": evaluation,
@@ -957,25 +958,28 @@ def test_mode():
     """A test endpoint that doesn't actually use Daytona or Groq APIs"""
     user_input = request.form.get('user_input')
     sandbox_count = request.form.get('sandbox_count', '3')
-    
+
     # Generate a unique session ID for this execution run
     session_id = str(uuid.uuid4())
-    
+
     if not user_input:
         return jsonify({"error": "No input provided"}), 400
-    
+
+    # Get MAX_SANDBOXES from environment variable or default to 10
+    max_sandboxes = int(os.environ.get("MAX_SANDBOXES", 10))
+
     try:
         sandbox_count = int(sandbox_count)
-        if sandbox_count < 1 or sandbox_count > 10:
+        if sandbox_count < 1 or sandbox_count > max_sandboxes:
             sandbox_count = 3  # Default to 3 if out of range
     except ValueError:
         sandbox_count = 3  # Default to 3 if not a valid number
-    
+
     print(f"DEBUG: Test mode activated with input: {user_input}, sandbox count: {sandbox_count}")
-    
+
     # Initialize sandbox status for visualization
     print(f"DEBUG: Test mode - emitting initial status for {sandbox_count} sandboxes with session ID {session_id}")
-    
+
     # Send all sandbox statuses at once with a small delay
     # This helps ensure the frontend receives them properly
     def emit_initial_test_status():
@@ -988,11 +992,11 @@ def test_mode():
                 'status': 'pending',
                 'progress': 0
             })
-            
+
     # Start emitting in a background thread to not block request
     import threading
     threading.Thread(target=emit_initial_test_status).start()
-    
+
     # Emit status updates with delays to simulate real sandbox creation
     def emit_test_updates():
         import time
@@ -1005,7 +1009,7 @@ def test_mode():
                 'progress': 20
             })
             time.sleep(0.3)
-            
+
             # Preparing
             socketio.emit('sandbox_status', {
                 'session_id': session_id,
@@ -1014,7 +1018,7 @@ def test_mode():
                 'progress': 40
             })
             time.sleep(0.3)
-            
+
             # Ready
             socketio.emit('sandbox_status', {
                 'session_id': session_id,
@@ -1023,7 +1027,7 @@ def test_mode():
                 'progress': 60
             })
             time.sleep(0.3)
-            
+
             # Generating code
             socketio.emit('sandbox_status', {
                 'session_id': session_id,
@@ -1032,7 +1036,7 @@ def test_mode():
                 'progress': 70
             })
             time.sleep(0.5)
-            
+
             # Executing
             socketio.emit('sandbox_status', {
                 'session_id': session_id,
@@ -1041,19 +1045,27 @@ def test_mode():
                 'progress': 85
             })
             time.sleep(0.5)
-            
-            # Complete
-            socketio.emit('sandbox_status', {
-                'session_id': session_id,
-                'sandbox_id': i,
-                'status': 'complete',
-                'progress': 100
-            })
-    
+
+            # Randomly choose between complete and error for demonstration purposes
+            if i % 3 == 0:  # Every third sandbox will show an error
+                socketio.emit('sandbox_status', {
+                    'session_id': session_id,
+                    'sandbox_id': i,
+                    'status': 'error',
+                    'progress': 90
+                })
+            else:
+                socketio.emit('sandbox_status', {
+                    'session_id': session_id,
+                    'sandbox_id': i,
+                    'status': 'complete',
+                    'progress': 100
+                })
+
     # Start emitting updates in a background thread
     import threading
     threading.Thread(target=emit_test_updates, daemon=True).start()
-    
+
     # Create dummy results
     results = []
     for i in range(sandbox_count):
@@ -1067,17 +1079,26 @@ def solution():
 result = solution()
 print(f'Result: {{result}}')"""
 
-        results.append({
-            "generated_code": gen_code,
-            "execution_output": f"This is test implementation {i+1}\nResult: {i+1}",
-            "execution_result": "Success"
-        })
-    
+        # Create a mix of successful and failed implementations
+        if i % 3 == 0:  # Every third sandbox will show an error
+            results.append({
+                "generated_code": gen_code,
+                "execution_output": f"This is test implementation {i+1}\nError: Division by zero occurred",
+                "execution_result": "Error",
+                "error": "ZeroDivisionError: division by zero"
+            })
+        else:
+            results.append({
+                "generated_code": gen_code,
+                "execution_output": f"This is test implementation {i+1}\nResult: {i+1}",
+                "execution_result": "Success"
+            })
+
     # Create dummy evaluation
     evaluation = {
         "evaluation": f"After analyzing the 5 implementations for the task '{user_input}', I've determined that Implementation 3 is the best solution because it has the most efficient code structure, better readability, and correct output."
     }
-    
+
     return jsonify({
         "results": results,
         "evaluation": evaluation
@@ -1086,53 +1107,53 @@ print(f'Result: {{result}}')"""
 if __name__ == '__main__':
     # Create templates directory
     os.makedirs('templates', exist_ok=True)
-    
+
     # Check if we're in test mode (no API keys)
     test_mode = False
     daytona_api_key = os.environ.get("DAYTONA_API_KEY")
     groq_api_key = os.environ.get("GROQ_API_KEY")
-    
+
     if not daytona_api_key or daytona_api_key == "your_daytona_api_key_here":
         print("WARNING: DAYTONA_API_KEY missing or default value. Running in test mode.")
         test_mode = True
-    
+
     if not groq_api_key or groq_api_key == "your_groq_api_key_here":
         print("WARNING: GROQ_API_KEY missing or default value. Running in test mode.")
         test_mode = True
-        
+
     print(f"GROQ_API_KEY value: {groq_api_key[:5] if groq_api_key else None}... (first 5 characters)")
     print(f"Test mode: {test_mode}")
-    
+
     # Update the index.html template to use test mode if needed
     if test_mode:
         print("Updating index.html to use test mode")
         try:
             with open('templates/index.html', 'r') as f:
                 content = f.read()
-            
+
             # Replace the form action to use test mode if not already set
             if 'action="/test"' not in content:
                 content = content.replace('id="codeForm" class="space-y-4"',
                                     'id="codeForm" class="space-y-4" action="/test"')
-                
+
                 with open('templates/index.html', 'w') as f:
                     f.write(content)
-                
+
                 print("Updated index.html to use test mode endpoint")
             else:
                 print("index.html already configured for test mode")
-                
+
             # Also make the test mode banner visible
             if 'id="testModeBanner" class="hidden' in content:
                 content = content.replace('id="testModeBanner" class="hidden', 'id="testModeBanner" class="')
-                
+
                 with open('templates/index.html', 'w') as f:
                     f.write(content)
-                
+
                 print("Made test mode banner visible")
         except Exception as e:
             print(f"Error updating index.html: {str(e)}")
-    
+
     try:
         # Run with SocketIO instead of the Flask built-in server
         # This is important for WebSocket support

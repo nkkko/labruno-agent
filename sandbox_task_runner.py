@@ -18,12 +18,12 @@ def generate_code(user_input):
     # Start timing the LLM code generation
     groq_start_time = time.time()
     
-    # Generate code using LLaMA 4
+    # Generate code using LLaMA 4 with a more specific prompt
     chat_completion = client.chat.completions.create(
         messages=[
             {
                 "role": "system", 
-                "content": "You are a helpful AI assistant that generates Python code based on user requests. Generate ONLY the Python code without any explanations or markdown formatting."
+                "content": "You are a helpful AI assistant that generates Python code based on user requests. Always provide your code inside ```python code blocks. Even if you want to provide multiple code examples, include each inside its own ```python code block. Our code executor will only extract and run the code from within the first python code block."
             },
             {
                 "role": "user",
@@ -45,10 +45,19 @@ def execute_code(code):
     import sys
     from io import StringIO
     import traceback
+    import re
     
     # First, strip markdown code blocks if present
     print(f"DEBUG[sandbox]: Original code length: {len(code)} chars")
-    if code.startswith('```python') or code.startswith('```'):
+    
+    # Extract Python code from within code blocks using regex
+    python_code_blocks = re.findall(r'```python\s*(.*?)\s*```', code, re.DOTALL)
+    
+    if python_code_blocks:
+        # Use the first Python code block if multiple are found
+        code = python_code_blocks[0].strip()
+    elif code.startswith('```python') or code.startswith('```'):
+        # Fallback to original method if regex didn't work
         # Find the end of the opening code block
         start_idx = code.find('\n') + 1
         # Find the closing code block
