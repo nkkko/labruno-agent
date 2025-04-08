@@ -140,9 +140,30 @@
                 </style>
             </div>
 
-            <div id="errorContainer" class="hidden mt-6 p-4 bg-red-50 border-l-4 border-red-500">
-                <h3 class="text-lg font-medium text-red-800">Error</h3>
-                <div id="errorMessage" class="mt-2 text-sm text-red-700"></div>
+            <div id="errorContainer" class="hidden mt-6 p-4 bg-red-50 border border-red-300 rounded-lg shadow-sm">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <!-- Error icon -->
+                        <svg class="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-lg font-medium text-red-800">Error</h3>
+                        <div id="errorMessage" class="mt-2 text-sm text-red-700"></div>
+                        
+                        <!-- Connection error help text -->
+                        <div id="connectionErrorHelp" class="mt-3 p-3 bg-white rounded border border-red-200 text-sm hidden">
+                            <p class="font-medium mb-2">Troubleshooting Steps:</p>
+                            <ul class="list-disc list-inside space-y-1 text-gray-700">
+                                <li>Check that the Flask server is running in your terminal</li>
+                                <li>Make sure you're using the correct URL (usually http://localhost:5000)</li>
+                                <li>Verify that no firewall is blocking the connection</li>
+                                <li>Try restarting the server with <code class="bg-gray-100 px-1 py-0.5 rounded">python app.py</code></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="results" class="hidden mt-6">
@@ -755,6 +776,9 @@
                         user_input: userInput,
                         sandbox_count: document.getElementById('sandbox_count').value
                     })
+                }).catch(error => {
+                    // Custom handling for network errors (server not running)
+                    throw new Error("Connection failed. Please check if the server is running and try again.");
                 });
 
                 const data = await response.json();
@@ -1005,9 +1029,19 @@
 
             } catch (error) {
                 console.error('Error:', error);
-                errorMessage.textContent = `An error occurred while processing your request: ${error.message}`;
+                errorMessage.textContent = error.message;
                 errorContainer.classList.remove('hidden');
                 loadingIndicator.classList.add('hidden');
+                
+                // Show connection help if it's a connection error
+                const connectionErrorHelp = document.getElementById('connectionErrorHelp');
+                if (error.message.includes("Connection failed") || 
+                    error.message.includes("Failed to fetch") || 
+                    error.message.includes("NetworkError")) {
+                    connectionErrorHelp.classList.remove('hidden');
+                } else {
+                    connectionErrorHelp.classList.add('hidden');
+                }
             } finally {
                 // Re-enable submit button
                 submitButton.disabled = false;
