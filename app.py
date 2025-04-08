@@ -100,14 +100,10 @@ GROQ_API_KEY={groq_api_key}
         # Upload the environment file to the sandbox
         sandbox.fs.upload_file("/home/daytona/.env", open('temp_env.txt', 'rb').read())
         
-        # Simple environment setup to make sure we have the key in the environment
-        env_setup_code = '''
-import os
-
-os.environ["GROQ_API_KEY"] = "{}".format(open('/home/daytona/.env').read().split('=')[1].strip())
-print(f"DEBUG[sandbox]: GROQ_API_KEY set directly: {os.environ.get('GROQ_API_KEY')[:5]}...")
-'''
-        sandbox.process.code_run(env_setup_code)
+        # Set environment variables using process.exec
+        print("DEBUG: Setting environment variables using process.exec")
+        response = sandbox.process.exec(f"export GROQ_API_KEY={groq_api_key}")
+        print(f"DEBUG: Environment variable set response: {response.result}")
         
         # Remove the temporary file
         os.remove('temp_env.txt')
@@ -161,14 +157,10 @@ GROQ_API_KEY={groq_api_key}
 '''
         sandbox.fs.upload_file("/home/daytona/.env", env_file_content.encode('utf-8'))
         
-        # Run code to set the environment variable directly
-        env_setup_code = '''
-import os
-
-os.environ["GROQ_API_KEY"] = "{}".format(open('/home/daytona/.env').read().split('=')[1].strip())
-print(f"DEBUG[sandbox]: GROQ_API_KEY set directly: {os.environ.get('GROQ_API_KEY')[:5]}...")
-'''
-        sandbox.process.code_run(env_setup_code)
+        # Set environment variables using process.exec
+        print("DEBUG: Setting environment variables using process.exec")
+        response = sandbox.process.exec(f"export GROQ_API_KEY={groq_api_key}")
+        print(f"DEBUG: Environment variable set response: {response.result}")
         
         # Calculate preparation time
         prep_time = time.time() - start_time
@@ -1123,13 +1115,9 @@ if __name__ == '__main__':
     try:
         # Run with SocketIO instead of the Flask built-in server
         # This is important for WebSocket support
-        port = 5000
-        try:
-            socketio.run(app, debug=False, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
-        except OSError:
-            # If port 5000 is in use, try port 5001
-            port = 5001
-            print("Port 5000 is in use, trying port 5001...")
-            socketio.run(app, debug=False, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
+        # Force port 5001 to avoid conflicts with AirPlay on macOS
+        port = 5001
+        print(f"Starting server on port {port}...")
+        socketio.run(app, debug=False, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
     except Exception as e:
         print(f"Error starting the server: {str(e)}")
