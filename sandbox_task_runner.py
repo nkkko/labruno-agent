@@ -279,9 +279,11 @@ print(f"Result: {{result}}")
             "sandbox_start_time": time.time()       # Timestamp when sandbox processing is complete
         }
 
+        # Use explicit import in this scope to avoid UnboundLocalError
+        import json as result_json
         result_file_path = os.path.join(home_dir, "result.json")
         with open(result_file_path, "w") as f:
-            json.dump(result, f)
+            result_json.dump(result, f)
 
         return result
     except Exception as e:
@@ -316,8 +318,10 @@ print(f"Result: {{result}}")
         try:
             home_dir = os.path.expanduser("~")
             error_file_path = os.path.join(home_dir, "error_result.json")
+            # Use explicit import in this scope to avoid UnboundLocalError
+            import json as error_json
             with open(error_file_path, "w") as f:
-                json.dump(error_result, f)
+                error_json.dump(error_result, f)
         except Exception as save_error:
             print(f"Error saving error result: {str(save_error)}")
             
@@ -325,7 +329,11 @@ print(f"Result: {{result}}")
 
 # The following code runs when this script is executed directly
 if __name__ == "__main__":
+    # Import all needed modules at this scope
     import sys
+    import json as main_json
+    import os
+    import time
 
     if len(sys.argv) > 1:
         user_input = sys.argv[1]
@@ -333,4 +341,4 @@ if __name__ == "__main__":
         user_input = input("Enter your task: ")
 
     result = process_task(user_input)
-    print(json.dumps(result))
+    print(main_json.dumps(result))
