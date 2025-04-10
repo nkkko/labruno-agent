@@ -50,20 +50,20 @@ daytona = Daytona(DaytonaConfig(api_key=daytona_api_key, target=daytona_target))
 def create_sandbox(code_to_upload=None):
     """Create a Daytona sandbox and optionally upload code to it"""
     start_time = time.time()
-    
+
     # Create sandbox with environment variables
     groq_api_key = os.getenv("GROQ_API_KEY")
     groq_model = os.getenv("GROQ_MODEL")
-    
+
     # Create parameters with environment variables
     params = CreateSandboxParams(
-        language="python", 
+        language="python",
         env={
             "GROQ_API_KEY": groq_api_key,
             "GROQ_MODEL": groq_model
         }
     )
-    
+
     print(f"DEBUG: Using GROQ_API_KEY: {'Present' if groq_api_key else 'Missing'}")
     print(f"DEBUG: Using GROQ_MODEL: {groq_model}")
 
@@ -86,7 +86,7 @@ def create_sandbox(code_to_upload=None):
 
         # Get API key and model from environment
         groq_model = os.getenv("GROQ_MODEL")
-        
+
         # Insert environment variables directly into the task runner file
         modified_task_runner = task_runner_content.replace(
             'import os\nimport json\nimport sys\nfrom groq import Groq',
@@ -115,7 +115,7 @@ print("DEBUG[sandbox]: Hard-coded GROQ_MODEL:", os.environ.get("GROQ_MODEL"))'''
         print("DEBUG: Setting environment variables using process.exec")
         response = sandbox.process.exec(f"export GROQ_API_KEY={groq_api_key}")
         print(f"DEBUG: Environment variable set response: {response.result}")
-        
+
         # Set GROQ_MODEL environment variable
         groq_model = os.getenv("GROQ_MODEL")
         if groq_model:
@@ -177,7 +177,7 @@ GROQ_MODEL={groq_model}
         print("DEBUG: Setting environment variables using process.exec")
         response = sandbox.process.exec(f"export GROQ_API_KEY={groq_api_key}")
         print(f"DEBUG: Environment variable set response: {response.result}")
-        
+
         # Set GROQ_MODEL environment variable
         if groq_model:
             response = sandbox.process.exec(f"export GROQ_MODEL={groq_model}")
@@ -238,7 +238,7 @@ try:
 
     # Use task runner to process the request - triple quotes to ensure multi-line strings work
     user_input = """{safe_user_input}"""  # Get properly escaped user input
-    print(f"DEBUG[sandbox]: Processing task: {user_input}")
+    print("DEBUG[sandbox]: Processing task: " + repr(user_input))  # Use repr instead of f-string
     # Remove any trailing newlines that might cause issues
     user_input = user_input.strip()
     result = task_runner.process_task(user_input)
