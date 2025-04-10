@@ -69,13 +69,37 @@ def generate_code(user_input):
         # Log API response with detailed timing
         response_time = time.time()
 
-        # Get token info if available
-        input_tokens = getattr(chat_completion, 'usage', {}).get('prompt_tokens', 0)
-        output_tokens = getattr(chat_completion, 'usage', {}).get('completion_tokens', 0)
-
-        print(f"API_RESPONSE_LOG: model={model}, time={response_time}, " +
-              f"duration={api_call_duration:.2f}s, status=success, " +
-              f"input_tokens={input_tokens}, output_tokens={output_tokens}")
+        # Get token info if available - handle different API response formats
+        try:
+            # Try to get usage information safely
+            usage = getattr(chat_completion, 'usage', None)
+            
+            # Different models/API versions might have different attribute structures
+            if usage:
+                if hasattr(usage, 'prompt_tokens'):
+                    # Direct attribute access
+                    input_tokens = usage.prompt_tokens
+                    output_tokens = getattr(usage, 'completion_tokens', 0)
+                elif hasattr(usage, '__getitem__'):
+                    # Dictionary-like access
+                    input_tokens = usage.get('prompt_tokens', 0)
+                    output_tokens = usage.get('completion_tokens', 0)
+                else:
+                    # Fall back to default values
+                    input_tokens = 0
+                    output_tokens = 0
+            else:
+                input_tokens = 0
+                output_tokens = 0
+                
+            print(f"API_RESPONSE_LOG: model={model}, time={response_time}, " +
+                  f"duration={api_call_duration:.2f}s, status=success, " +
+                  f"input_tokens={input_tokens}, output_tokens={output_tokens}")
+        except Exception as token_err:
+            # If anything goes wrong with token counting, log it but continue
+            print(f"API_RESPONSE_LOG: model={model}, time={response_time}, " +
+                  f"duration={api_call_duration:.2f}s, status=success, " +
+                  f"token_error={str(token_err)}")
 
         # Process the response
         generated_code = chat_completion.choices[0].message.content
