@@ -211,11 +211,18 @@ def process_task(user_input):
             timing_details = timing_breakdown
 
         except Exception as e:
-            # Log API error - import for scope
-            import time
-            model_name = os.environ.get("GROQ_MODEL")
-            print(f"API_ERROR_LOG: model={model_name}, time={time.time()}, error={str(e)}")
-            print(f"Error generating code: {str(e)}")
+            try:
+                # Log API error with proper imports in this scope
+                import time
+                import os
+                model_name = os.environ.get("GROQ_MODEL", "unknown")
+                current_time = time.time()
+                print(f"API_ERROR_LOG: model={model_name}, time={current_time}, error={str(e)}")
+                print(f"Error generating code: {str(e)}")
+            except Exception as inner_e:
+                # Handle any errors in the error handler itself
+                print(f"Error in error handler: {str(inner_e)}")
+                print(f"Original error: {str(e)}")
             # If we can't generate code, use a default function that accomplishes nothing
             generated_code = f"""
 # Fallback implementation since code generation failed
@@ -278,19 +285,42 @@ print(f"Result: {{result}}")
 
         return result
     except Exception as e:
+        # Ensure all imports are within this scope
         import traceback
+        import os
+        import json
+        import time
+        
+        # Get detailed error information
         error_trace = traceback.format_exc()
         print(f"DEBUG[sandbox]: Process task error: {str(e)}\n{error_trace}")
+        
+        # Create result with error details
         error_result = {
             "generated_code": f"Error occurred during processing: {str(e)}",
             "execution_output": error_trace,
-            "execution_result": f"Error: {str(e)}"
+            "execution_result": f"Error: {str(e)}",
+            # Add timing fields to ensure the result has the expected structure
+            "groq_time": 0,
+            "code_generation_time": 0,
+            "timing_details": {
+                "preparation": 0,
+                "api_call": 0,
+                "processing": 0,
+                "total": 0
+            },
+            "sandbox_start_time": time.time()
         }
-        import os
-        home_dir = os.path.expanduser("~")
-        error_file_path = os.path.join(home_dir, "error_result.json")
-        with open(error_file_path, "w") as f:
-            json.dump(error_result, f)
+        
+        # Try to save the error result
+        try:
+            home_dir = os.path.expanduser("~")
+            error_file_path = os.path.join(home_dir, "error_result.json")
+            with open(error_file_path, "w") as f:
+                json.dump(error_result, f)
+        except Exception as save_error:
+            print(f"Error saving error result: {str(save_error)}")
+            
         return error_result
 
 # The following code runs when this script is executed directly
