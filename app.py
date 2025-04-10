@@ -50,11 +50,22 @@ daytona = Daytona(DaytonaConfig(api_key=daytona_api_key, target=daytona_target))
 def create_sandbox(code_to_upload=None):
     """Create a Daytona sandbox and optionally upload code to it"""
     start_time = time.time()
-    params = CreateSandboxParams(language="python")
-
-    # Get environment variables
+    
+    # Create sandbox with environment variables
     groq_api_key = os.getenv("GROQ_API_KEY")
+    groq_model = os.getenv("GROQ_MODEL")
+    
+    # Create parameters with environment variables
+    params = CreateSandboxParams(
+        language="python", 
+        env={
+            "GROQ_API_KEY": groq_api_key,
+            "GROQ_MODEL": groq_model
+        }
+    )
+    
     print(f"DEBUG: Using GROQ_API_KEY: {'Present' if groq_api_key else 'Missing'}")
+    print(f"DEBUG: Using GROQ_MODEL: {groq_model}")
 
     sandbox = daytona.create(params)
     creation_time = time.time() - start_time
@@ -73,7 +84,10 @@ def create_sandbox(code_to_upload=None):
         with open('sandbox_task_runner.py', 'r') as f:
             task_runner_content = f.read()
 
-        # Insert the API key directly into the task runner file
+        # Get API key and model from environment
+        groq_model = os.getenv("GROQ_MODEL")
+        
+        # Insert environment variables directly into the task runner file
         modified_task_runner = task_runner_content.replace(
             'import os\nimport json\nimport sys\nfrom groq import Groq',
             f'''import os
@@ -81,9 +95,11 @@ import json
 import sys
 from groq import Groq
 
-# Pre-set API key
+# Pre-set environment variables
 os.environ["GROQ_API_KEY"] = "{groq_api_key}"
-print("DEBUG[sandbox]: Hard-coded GROQ_API_KEY is present:", bool(os.environ.get("GROQ_API_KEY")))'''
+os.environ["GROQ_MODEL"] = "{groq_model}"
+print("DEBUG[sandbox]: Hard-coded GROQ_API_KEY is present:", bool(os.environ.get("GROQ_API_KEY")))
+print("DEBUG[sandbox]: Hard-coded GROQ_MODEL:", os.environ.get("GROQ_MODEL"))'''
         )
 
         # Save this modified version to a temp directory to avoid triggering Flask reload
@@ -99,6 +115,12 @@ print("DEBUG[sandbox]: Hard-coded GROQ_API_KEY is present:", bool(os.environ.get
         print("DEBUG: Setting environment variables using process.exec")
         response = sandbox.process.exec(f"export GROQ_API_KEY={groq_api_key}")
         print(f"DEBUG: Environment variable set response: {response.result}")
+        
+        # Set GROQ_MODEL environment variable
+        groq_model = os.getenv("GROQ_MODEL")
+        if groq_model:
+            response = sandbox.process.exec(f"export GROQ_MODEL={groq_model}")
+            print(f"DEBUG: GROQ_MODEL environment variable set response: {response.result}")
     except Exception as e:
         print(f"DEBUG: Error setting environment variables: {str(e)}")
 
@@ -143,9 +165,11 @@ def prepare_sandbox(sandbox, task_runner_code):
 
         # Also upload the .env file as a backup
         groq_api_key = os.getenv("GROQ_API_KEY")
+        groq_model = os.getenv("GROQ_MODEL")
         env_file_content = f'''
 # Environment variables for sandbox
 GROQ_API_KEY={groq_api_key}
+GROQ_MODEL={groq_model}
 '''
         sandbox.fs.upload_file("/home/daytona/.env", env_file_content.encode('utf-8'))
 
@@ -153,6 +177,11 @@ GROQ_API_KEY={groq_api_key}
         print("DEBUG: Setting environment variables using process.exec")
         response = sandbox.process.exec(f"export GROQ_API_KEY={groq_api_key}")
         print(f"DEBUG: Environment variable set response: {response.result}")
+        
+        # Set GROQ_MODEL environment variable
+        if groq_model:
+            response = sandbox.process.exec(f"export GROQ_MODEL={groq_model}")
+            print(f"DEBUG: GROQ_MODEL environment variable set response: {response.result}")
 
         # Calculate preparation time
         prep_time = time.time() - start_time

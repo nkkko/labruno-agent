@@ -211,9 +211,10 @@ def process_task(user_input):
             timing_details = timing_breakdown
 
         except Exception as e:
-            # Log API error
-            model = os.environ.get("GROQ_MODEL")
-            print(f"API_ERROR_LOG: model={model}, time={time.time()}, error={str(e)}")
+            # Log API error - import for scope
+            import time
+            model_name = os.environ.get("GROQ_MODEL")
+            print(f"API_ERROR_LOG: model={model_name}, time={time.time()}, error={str(e)}")
             print(f"Error generating code: {str(e)}")
             # If we can't generate code, use a default function that accomplishes nothing
             generated_code = f"""
