@@ -200,7 +200,7 @@
                                 <div id="avgSandboxCreation" class="text-xl font-semibold">-</div>
                             </div>
                             <div class="bg-white p-3 rounded shadow-sm">
-                                <div class="text-sm text-gray-500">Avg Code Generation</div>
+                                <div class="text-sm text-gray-500">Avg API Call Time</div>
                                 <div id="avgGroqTime" class="text-xl font-semibold">-</div>
                             </div>
                             <div class="bg-white p-3 rounded shadow-sm">
@@ -991,12 +991,25 @@
                             }
                         };
 
-                        const metrics = [
+                        // Standard metrics
+                        let metrics = [
                             {label: 'Sandbox Creation:', value: formatTimeValue(result.sandbox_creation_time || 0)},
-                            {label: 'Code Generation (GROQ):', value: formatTimeValue(result.groq_time || 0)},
+                            {label: 'API Call Time:', value: formatTimeValue(result.groq_time || 0)},
                             {label: 'Total Generation Time:', value: formatTimeValue(result.code_generation_time || 0)},
                             {label: 'Total Sandbox Time:', value: formatTimeValue(result.total_sandbox_time || 0)}
                         ];
+                        
+                        // Add detailed timing information if available
+                        if (result.timing_details) {
+                            const td = result.timing_details;
+                            metrics = metrics.concat([
+                                {label: '⏱️ Detailed Timing:', value: ''},
+                                {label: '• API Preparation:', value: formatTimeValue(td.preparation || 0)},
+                                {label: '• API Call:', value: formatTimeValue(td.api_call || 0)},
+                                {label: '• Response Processing:', value: formatTimeValue(td.processing || 0)},
+                                {label: '• Total API Flow:', value: formatTimeValue(td.total || 0)}
+                            ]);
+                        }
 
                         metrics.forEach(metric => {
                             const labelDiv = document.createElement('div');
