@@ -13,6 +13,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Load environment variables
 load_dotenv(verbose=True, override=True)  # Added verbose and override to ensure environment variables are loaded
 
+# Helper function to safely handle string literals in Python code
+def safe_string_literal(s):
+    """Properly escape a string for insertion into Python code as string literal"""
+    return s.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace("'", "\\'")
+
 # Set environment variables directly to ensure they're available
 try:
     with open('/Users/nikola/dev/labruno/.env', 'r') as f:
@@ -171,7 +176,7 @@ def generate_and_execute_code(sandbox, user_input, task_runner_path=None):
         print(f"DEBUG: Running code in sandbox to generate and execute code")
         # No indentation in the executed code to prevent errors
         # Properly escape the user input to avoid issues with quotes
-        safe_user_input = user_input.replace('\\', '\\\\').replace('"', '\\"')
+        safe_user_input = safe_string_literal(user_input)
 
         # Prepare code based on whether we have a task runner or need to do direct execution
         if task_runner_path:
@@ -202,9 +207,11 @@ try:
 
     print("DEBUG[sandbox]: Successfully loaded task runner")
 
-    # Use task runner to process the request
-    user_input = "{safe_user_input}"
-    print(f"DEBUG[sandbox]: Processing task: {{user_input}}")
+    # Use task runner to process the request - triple quotes to ensure multi-line strings work
+    user_input = """{safe_user_input}"""  # Get properly escaped user input
+    print(f"DEBUG[sandbox]: Processing task: {user_input}")
+    # Remove any trailing newlines that might cause issues
+    user_input = user_input.strip()
     result = task_runner.process_task(user_input)
     print("DEBUG[sandbox]: Task processing complete")
 
@@ -246,9 +253,20 @@ def run_code_generation_and_execution():
         print("DEBUG[sandbox]: Error initializing Groq client:", str(e))
         raise
 
-    # Generate code using LLaMA 4
+    # Generate code
     try:
-        print("DEBUG[sandbox]: Creating chat completion with LLaMA 4")
+        print("DEBUG[sandbox]: Creating chat completion")
+
+        # Get model from environment variable
+        groq_model = os.environ.get("GROQ_MODEL")
+        print(f"DEBUG[sandbox]: Using model: {groq_model}")
+
+        # Log API request
+        import time
+        request_time = time.time()
+        print(f"API_REQUEST_LOG: model={groq_model}, time={request_time}, user_input_length={len('{}')}")
+
+        api_start_time = time.time()
         chat_completion = client.chat.completions.create(
             messages=[
                 {{
@@ -260,10 +278,17 @@ def run_code_generation_and_execution():
                     "content": "{}"
                 }}
             ],
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            model=groq_model,
         )
+
+        # Log API response
+        api_time = time.time() - api_start_time
+        print(f"API_RESPONSE_LOG: model={groq_model}, time={time.time()}, duration={api_time:.2f}s, status=success")
         print("DEBUG[sandbox]: Chat completion created")
     except Exception as e:
+        # Log API error
+        import time
+        print(f"API_ERROR_LOG: model={os.environ.get('GROQ_MODEL')}, time={time.time()}, error={str(e)}")
         print("DEBUG[sandbox]: Error creating chat completion:", str(e))
         raise
 
@@ -579,7 +604,8 @@ def evaluate_results(main_sandbox, results):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    model_name = os.environ.get("GROQ_MODEL")
+    return render_template('index.html', model_name=model_name)
 
 @app.route('/execute', methods=['POST'])
 def execute():
@@ -845,9 +871,9 @@ def execute():
 
                 sandbox_status[sandbox_id]['status'] = status
                 sandbox_status[sandbox_id]['progress'] = progress
-                
+
                 print(f"DEBUG: Emitting final status for sandbox {sandbox_id}: {status}")
-                
+
                 # Send several status updates to ensure it's received and processed
                 # Sometimes socket messages can be dropped, so we send multiple
                 for _ in range(3):  # Send 3 times with small delays
@@ -1112,6 +1138,9 @@ if __name__ == '__main__':
     test_mode = False
     daytona_api_key = os.environ.get("DAYTONA_API_KEY")
     groq_api_key = os.environ.get("GROQ_API_KEY")
+
+    # Get the model name for display
+    model_name = os.environ.get("GROQ_MODEL")
 
     if not daytona_api_key or daytona_api_key == "your_daytona_api_key_here":
         print("WARNING: DAYTONA_API_KEY missing or default value. Running in test mode.")

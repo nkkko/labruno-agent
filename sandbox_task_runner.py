@@ -15,8 +15,15 @@ def generate_code(user_input):
     print(f"DEBUG[sandbox]: Using GROQ_API_KEY: {'Present' if groq_api_key else 'Missing'}")
     client = Groq(api_key=groq_api_key)
     
+    # Get model from environment
+    model = os.environ.get("GROQ_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+    print(f"DEBUG[sandbox]: Using model: {model}")
+    
     # Start timing the LLM code generation
     groq_start_time = time.time()
+    
+    # Log API request
+    print(f"API_REQUEST_LOG: model={model}, time={time.time()}, user_input_length={len(user_input)}")
     
     # Generate code using LLaMA 4 with a more specific prompt
     chat_completion = client.chat.completions.create(
@@ -30,11 +37,14 @@ def generate_code(user_input):
                 "content": user_input
             }
         ],
-        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        model=model,
     )
     
     # Calculate LLM generation time
     groq_time = time.time() - groq_start_time
+    
+    # Log API response
+    print(f"API_RESPONSE_LOG: model={model}, time={time.time()}, duration={groq_time:.2f}s, status=success")
     print(f"DEBUG[sandbox]: GROQ API response time: {groq_time:.2f}s")
     
     # Extract the generated code
@@ -123,6 +133,9 @@ def process_task(user_input):
             print(f"Successfully generated code for: {user_input}")
             print(f"DEBUG[sandbox]: LLM time: {groq_time:.2f}s, Total gen time: {code_gen_total_time:.2f}s")
         except Exception as e:
+            # Log API error
+            model = os.environ.get("GROQ_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+            print(f"API_ERROR_LOG: model={model}, time={time.time()}, error={str(e)}")
             print(f"Error generating code: {str(e)}")
             # If we can't generate code, use a default function that accomplishes nothing
             generated_code = f"""

@@ -11,7 +11,8 @@
 <body class="bg-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-8">
         <h1 class="text-3xl font-bold text-center my-8">Generate and Evaluate Python Code</h1>
-        <p class="text-center mb-8 text-gray-600">Powered by LLaMA 4 on Groq and Daytona Sandboxes</p>
+        <p class="text-center mb-2 text-gray-600">Powered by Groq inference and Daytona sandboxes</p>
+        <p class="text-center mb-8 text-gray-500 text-xs italic" id="modelInfo">Using model: <span id="modelName" class="font-mono">{{ model_name }}</span></p>
 
         <div id="testModeBanner" class="hidden max-w-2xl mx-auto mb-4 bg-yellow-100 border-l-4 border-yellow-500 p-4">
             <div class="flex">
